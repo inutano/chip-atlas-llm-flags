@@ -34,6 +34,7 @@ require 'uri'
 require 'time'
 require 'fileutils'
 require 'thread'
+require 'logger'
 
 class VLLMRunner
   def initialize(options)
@@ -53,6 +54,7 @@ class VLLMRunner
     @transport_errors = 0
     @total_runtime_ms = 0
     @retry_counts = Hash.new(0)
+    @individual_runtimes = []
 
     # Thread safety
     @mutex = Mutex.new
@@ -218,6 +220,7 @@ class VLLMRunner
 
     @mutex.synchronize do
       @total_runtime_ms += runtime_ms
+      @individual_runtimes << runtime_ms
       @retry_counts[retries] += 1
       @transport_errors += 1 if error_flag == 'transport_error'
     end
@@ -361,6 +364,7 @@ class VLLMRunner
 
   def print_summary(total_time)
     avg_runtime = @total_processed > 0 ? @total_runtime_ms.to_f / @total_processed : 0
+    median_runtime = calculate_median_runtime
     skipped_records = 0  # vLLM doesn't skip records, only fails them
 
     log(:info, "=== INFERENCE SUMMARY ===")
@@ -370,6 +374,7 @@ class VLLMRunner
     log(:info, "Failed records: #{@total_failed}")
     log(:info, "Transport errors: #{@transport_errors}")
     log(:info, "Average runtime per sample: #{avg_runtime.round(2)} ms")
+    log(:info, "Median runtime per sample: #{median_runtime.round(2)} ms")
     log(:info, "Retry distribution:")
     (0..3).each do |retry_count|
       count = @retry_counts[retry_count]
@@ -383,6 +388,19 @@ class VLLMRunner
       log(:info, "=== INFERENCE END ===")
     else
       log(:warn, "=== INFERENCE END === (No records processed)")
+    end
+  end
+
+  def calculate_median_runtime
+    return 0 if @individual_runtimes.empty?
+
+    sorted_runtimes = @individual_runtimes.sort
+    length = sorted_runtimes.length
+
+    if length.odd?
+      sorted_runtimes[length / 2]
+    else
+      (sorted_runtimes[length / 2 - 1] + sorted_runtimes[length / 2]) / 2.0
     end
   end
 end

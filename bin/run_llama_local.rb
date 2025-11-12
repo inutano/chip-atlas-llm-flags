@@ -34,6 +34,7 @@ require 'open3'
 require 'time'
 require 'fileutils'
 require 'tmpdir'
+require 'logger'
 
 class LlamaLocalRunner
   def initialize(options)
@@ -54,6 +55,7 @@ class LlamaLocalRunner
     @total_runtime_ms = 0
     @retry_counts = Hash.new(0)
     @skipped_records = 0
+    @individual_runtimes = []
 
     setup_logging
     load_prompt_template
@@ -176,6 +178,7 @@ class LlamaLocalRunner
     runtime_ms = ((Time.now - start_time) * 1000).to_i
 
     @total_runtime_ms += runtime_ms
+    @individual_runtimes << runtime_ms
     @retry_counts[retries] += 1
 
     result = {
@@ -299,6 +302,7 @@ class LlamaLocalRunner
 
   def print_summary(total_time)
     avg_runtime = @total_processed > 0 ? @total_runtime_ms.to_f / @total_processed : 0
+    median_runtime = calculate_median_runtime
 
     log(:info, "=== INFERENCE SUMMARY ===")
     log(:info, "Total processing time: #{total_time.round(2)} seconds")
@@ -306,6 +310,7 @@ class LlamaLocalRunner
     log(:info, "Skipped records: #{@skipped_records}")
     log(:info, "Failed records: #{@total_failed}")
     log(:info, "Average runtime per sample: #{avg_runtime.round(2)} ms")
+    log(:info, "Median runtime per sample: #{median_runtime.round(2)} ms")
     log(:info, "Retry distribution:")
     (0..3).each do |retry_count|
       count = @retry_counts[retry_count]
@@ -319,6 +324,19 @@ class LlamaLocalRunner
       log(:info, "=== INFERENCE END ===")
     else
       log(:warn, "=== INFERENCE END === (No records processed)")
+    end
+  end
+
+  def calculate_median_runtime
+    return 0 if @individual_runtimes.empty?
+
+    sorted_runtimes = @individual_runtimes.sort
+    length = sorted_runtimes.length
+
+    if length.odd?
+      sorted_runtimes[length / 2]
+    else
+      (sorted_runtimes[length / 2 - 1] + sorted_runtimes[length / 2]) / 2.0
     end
   end
 end
