@@ -53,6 +53,7 @@ class LlamaLocalRunner
     @total_failed = 0
     @total_runtime_ms = 0
     @retry_counts = Hash.new(0)
+    @skipped_records = 0
 
     setup_logging
     load_prompt_template
@@ -61,10 +62,11 @@ class LlamaLocalRunner
   def run
     validate_inputs
 
-    log "Starting LLM inference on #{@input_file}"
-    log "Model: #{@model_path}"
-    log "Output: #{@output_file}"
-    log "Context size: #{@ctx_size}, Batch size: #{@batch_size}"
+    log(:info, "=== INFERENCE START ===")
+    log(:info, "Starting LLM inference on #{@input_file}")
+    log(:info, "Model: #{@model_path}")
+    log(:info, "Output: #{@output_file}")
+    log(:info, "Context size: #{@ctx_size}, Batch size: #{@batch_size}")
 
     start_time = Time.now
 
@@ -85,15 +87,32 @@ class LlamaLocalRunner
 
   def setup_logging
     FileUtils.mkdir_p(@output_dir) unless Dir.exist?(@output_dir)
-    @log_handle = File.open(@log_file, 'w')
+
+    # Setup dual logger (STDOUT + file)
+    @logger = Logger.new(MultiIO.new(STDOUT, File.open(@log_file, 'w')))
+    @logger.level = Logger::INFO
+    @logger.formatter = proc do |severity, datetime, progname, msg|
+      "#{datetime.iso8601} [#{severity}] #{msg}\n"
+    end
   end
 
-  def log(message)
-    timestamp = Time.now.strftime('%Y-%m-%d %H:%M:%S')
-    log_msg = "[#{timestamp}] #{message}"
-    puts log_msg
-    @log_handle.puts log_msg
-    @log_handle.flush
+  def log(level, message)
+    @logger.send(level, message)
+  end
+
+  # Dual IO class for logging to multiple outputs
+  class MultiIO
+    def initialize(*targets)
+      @targets = targets
+    end
+
+    def write(*args)
+      @targets.each { |t| t.write(*args) }
+    end
+
+    def close
+      @targets.each(&:close)
+    end
   end
 
   def load_prompt_template
@@ -136,14 +155,14 @@ class LlamaLocalRunner
       @total_processed += 1
 
       if (@total_processed % 10) == 0
-        log "Processed #{@total_processed} samples..."
+        log(:info, "Processed #{@total_processed} samples...")
       end
 
     rescue JSON::ParserError => e
-      log "ERROR: Invalid JSON in input line: #{e.message}"
+      log(:error, "Invalid JSON in input line: #{e.message}")
       @total_failed += 1
     rescue => e
-      log "ERROR: Failed to process record: #{e.message}"
+      log(:error, "Failed to process record: #{e.message}")
       @total_failed += 1
     end
   end
@@ -217,7 +236,7 @@ class LlamaLocalRunner
       rescue JSON::ParserError, StandardError => e
         retries += 1
         if retries <= max_retries
-          log "Retry #{retries}/#{max_retries} due to error: #{e.message}"
+          log(:warn, "Retry #{retries}/#{max_retries} due to error: #{e.message}")
         end
       end
     end
@@ -281,26 +300,26 @@ class LlamaLocalRunner
   def print_summary(total_time)
     avg_runtime = @total_processed > 0 ? @total_runtime_ms.to_f / @total_processed : 0
 
-    log "\n" + "="*60
-    log "INFERENCE SUMMARY"
-    log "="*60
-    log "Total processing time: #{total_time.round(2)} seconds"
-    log "Records processed: #{@total_processed}"
-    log "Records failed: #{@total_failed}"
-    log "Average runtime per sample: #{avg_runtime.round(2)} ms"
-    log ""
-    log "Retry distribution:"
+    log(:info, "=== INFERENCE SUMMARY ===")
+    log(:info, "Total processing time: #{total_time.round(2)} seconds")
+    log(:info, "Successfully processed: #{@total_processed}")
+    log(:info, "Skipped records: #{@skipped_records}")
+    log(:info, "Failed records: #{@total_failed}")
+    log(:info, "Average runtime per sample: #{avg_runtime.round(2)} ms")
+    log(:info, "Retry distribution:")
     (0..3).each do |retry_count|
       count = @retry_counts[retry_count]
       percentage = @total_processed > 0 ? (count.to_f / @total_processed * 100).round(1) : 0
-      log "  #{retry_count} retries: #{count} samples (#{percentage}%)"
+      log(:info, "  #{retry_count} retries: #{count} samples (#{percentage}%)")
     end
-    log ""
-    log "Output file: #{@output_file}"
-    log "Log file: #{@log_file}"
-    log "="*60
+    log(:info, "Output file: #{@output_file}")
+    log(:info, "Log file: #{@log_file}")
 
-    @log_handle.close
+    if @total_processed > 0
+      log(:info, "=== INFERENCE END ===")
+    else
+      log(:warn, "=== INFERENCE END === (No records processed)")
+    end
   end
 end
 

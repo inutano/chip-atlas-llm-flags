@@ -25,6 +25,9 @@
 #
 
 require 'json'
+require 'logger'
+require 'time'
+require 'fileutils'
 
 class ExtractedDataValidator
   def initialize(input_file)
@@ -32,13 +35,23 @@ class ExtractedDataValidator
     @line_number = 0
     @errors = []
     @fixed_records = 0
+    @processed_records = 0
+    @skipped_records = 0
+    @failed_records = 0
+
+    # Generate log file name based on input file
+    base_name = File.basename(@input_file, '.*')
+    log_file = "validated_#{base_name}_#{Time.now.strftime('%Y%m%d_%H%M%S')}.log"
+
+    setup_logger(log_file)
   end
 
   def validate
-    puts "Validating extracted data file: #{@input_file}"
+    log(:info, "=== VALIDATION START ===")
+    log(:info, "Validating extracted data file: #{@input_file}")
 
     unless File.exist?(@input_file)
-      puts "ERROR: Input file not found: #{@input_file}"
+      log(:error, "Input file not found: #{@input_file}")
       exit 1
     end
 
@@ -55,6 +68,34 @@ class ExtractedDataValidator
 
   private
 
+  def setup_logger(log_file)
+    # Setup dual logger (STDOUT + file)
+    @logger = Logger.new(MultiIO.new(STDOUT, File.open(log_file, 'w')))
+    @logger.level = Logger::INFO
+    @logger.formatter = proc do |severity, datetime, progname, msg|
+      "#{datetime.iso8601} [#{severity}] #{msg}\n"
+    end
+  end
+
+  def log(level, message)
+    @logger.send(level, message)
+  end
+
+  # Dual IO class for logging to multiple outputs
+  class MultiIO
+    def initialize(*targets)
+      @targets = targets
+    end
+
+    def write(*args)
+      @targets.each { |t| t.write(*args) }
+    end
+
+    def close
+      @targets.each(&:close)
+    end
+  end
+
   def validate_line(line)
     return if line.empty?
 
@@ -62,14 +103,17 @@ class ExtractedDataValidator
       # Parse JSON
       record = JSON.parse(line)
       validate_record(record)
+      @processed_records += 1
     rescue JSON::ParserError => e
       add_error("Invalid JSON: #{e.message}")
+      @failed_records += 1
     end
   end
 
   def validate_record(record)
     unless record.is_a?(Hash)
       add_error("Record is not a JSON object")
+      @failed_records += 1
       return
     end
 
@@ -86,16 +130,20 @@ class ExtractedDataValidator
   def validate_id(id)
     if id.nil? || id.to_s.strip.empty?
       add_error("Missing 'id' field")
+      @failed_records += 1
     elsif !id.to_s.start_with?('SAM')
       add_error("'id' field does not start with 'SAM': #{id}")
+      @failed_records += 1
     end
   end
 
   def validate_attributes(attributes)
     if attributes.nil?
       add_error("Missing 'attributes' field")
+      @failed_records += 1
     elsif !attributes.is_a?(Hash)
       add_error("'attributes' field is not an object: #{attributes.class}")
+      @failed_records += 1
     end
   end
 
@@ -113,32 +161,32 @@ class ExtractedDataValidator
 
     if fields_fixed.any?
       @fixed_records += 1
-      puts "Line #{@line_number}: Fixed missing fields: #{fields_fixed.join(', ')}"
+      log(:info, "Line #{@line_number}: Fixed missing fields: #{fields_fixed.join(', ')}")
     end
   end
 
   def add_error(message)
     error_msg = "Line #{@line_number}: #{message}"
     @errors << error_msg
-    puts "ERROR: #{error_msg}"
+    log(:error, error_msg)
   end
 
   def print_summary
-    puts "\n" + "="*50
-    puts "VALIDATION SUMMARY"
-    puts "="*50
-    puts "Total lines processed: #{@line_number}"
-    puts "Records with fixed fields: #{@fixed_records}"
-    puts "Validation errors: #{@errors.length}"
+    log(:info, "=== VALIDATION SUMMARY ===")
+    log(:info, "Total lines processed: #{@line_number}")
+    log(:info, "Successfully processed: #{@processed_records}")
+    log(:info, "Records with fixed fields: #{@fixed_records}")
+    log(:info, "Skipped records: #{@skipped_records}")
+    log(:info, "Failed records: #{@failed_records}")
+    log(:info, "Validation errors: #{@errors.length}")
 
     if @errors.any?
-      puts "\nERROR DETAILS:"
-      @errors.each { |error| puts "  #{error}" }
-      puts "\nValidation FAILED - see errors above"
+      log(:warn, "ERROR DETAILS:")
+      @errors.each { |error| log(:warn, "  #{error}") }
+      log(:error, "=== VALIDATION END === (FAILED)")
     else
-      puts "\nValidation PASSED - all records are valid"
+      log(:info, "=== VALIDATION END === (PASSED)")
     end
-    puts "="*50
   end
 end
 

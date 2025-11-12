@@ -30,6 +30,7 @@ require 'optparse'
 require 'time'
 require 'fileutils'
 require 'csv'
+require 'logger'
 
 class QASampleMaker
   def initialize(extracted_file, normalized_file, options = {})
@@ -58,11 +59,12 @@ class QASampleMaker
   def run
     validate_inputs
 
-    log "Starting QA sample creation"
-    log "Extracted file: #{@extracted_file}"
-    log "Predictions file: #{@normalized_file}"
-    log "Output file: #{@output_file}"
-    log "Sample size: #{@sample_size || 'all records'}"
+    log(:info, "=== QA SAMPLE START ===")
+    log(:info, "Starting QA sample creation")
+    log(:info, "Extracted file: #{@extracted_file}")
+    log(:info, "Predictions file: #{@normalized_file}")
+    log(:info, "Output file: #{@output_file}")
+    log(:info, "Sample size: #{@sample_size || 'all records'}")
 
     start_time = Time.now
 
@@ -81,15 +83,32 @@ class QASampleMaker
 
   def setup_logging
     FileUtils.mkdir_p(@output_dir) unless Dir.exist?(@output_dir)
-    @log_handle = File.open(@log_file, 'w')
+
+    # Setup dual logger (STDOUT + file)
+    @logger = Logger.new(MultiIO.new(STDOUT, File.open(@log_file, 'w')))
+    @logger.level = Logger::INFO
+    @logger.formatter = proc do |severity, datetime, progname, msg|
+      "#{datetime.iso8601} [#{severity}] #{msg}\n"
+    end
   end
 
-  def log(message)
-    timestamp = Time.now.strftime('%Y-%m-%d %H:%M:%S')
-    log_msg = "[#{timestamp}] #{message}"
-    puts log_msg
-    @log_handle.puts log_msg
-    @log_handle.flush
+  def log(level, message)
+    @logger.send(level, message)
+  end
+
+  # Dual IO class for logging to multiple outputs
+  class MultiIO
+    def initialize(*targets)
+      @targets = targets
+    end
+
+    def write(*args)
+      @targets.each { |t| t.write(*args) }
+    end
+
+    def close
+      @targets.each(&:close)
+    end
   end
 
   def validate_inputs
@@ -103,7 +122,7 @@ class QASampleMaker
   end
 
   def load_extracted_data
-    log "Loading extracted BioSample data..."
+    log(:info, "Loading extracted BioSample data...")
 
     File.foreach(@extracted_file) do |line|
       line = line.strip
@@ -116,15 +135,15 @@ class QASampleMaker
           @extracted_records += 1
         end
       rescue JSON::ParserError => e
-        log "WARN: Invalid JSON in extracted file: #{e.message}"
+        log(:warn, "Invalid JSON in extracted file: #{e.message}")
       end
     end
 
-    log "Loaded #{@extracted_records} extracted records"
+    log(:info, "Loaded #{@extracted_records} extracted records")
   end
 
   def load_predictions
-    log "Loading prediction data..."
+    log(:info, "Loading prediction data...")
 
     File.foreach(@normalized_file) do |line|
       line = line.strip
@@ -137,15 +156,15 @@ class QASampleMaker
           @prediction_records += 1
         end
       rescue JSON::ParserError => e
-        log "WARN: Invalid JSON in predictions file: #{e.message}"
+        log(:warn, "Invalid JSON in predictions file: #{e.message}")
       end
     end
 
-    log "Loaded #{@prediction_records} prediction records"
+    log(:info, "Loaded #{@prediction_records} prediction records")
   end
 
   def create_qa_sample
-    log "Creating QA sample..."
+    log(:info, "Creating QA sample...")
 
     # Find matching records
     matched_records = []
@@ -161,11 +180,11 @@ class QASampleMaker
       end
     end
 
-    log "Found #{@matched_records} records with both extraction and prediction data"
+    log(:info, "Found #{@matched_records} records with both extraction and prediction data")
 
     # Sample if requested
     if @sample_size && @sample_size < matched_records.length
-      log "Randomly sampling #{@sample_size} records from #{matched_records.length}"
+      log(:info, "Randomly sampling #{@sample_size} records from #{matched_records.length}")
       matched_records = matched_records.sample(@sample_size)
     end
 
@@ -286,7 +305,7 @@ class QASampleMaker
   end
 
   def write_tsv_output(records)
-    log "Writing TSV output with #{records.length} records..."
+    log(:info, "Writing TSV output with #{records.length} records...")
 
     headers = [
       'id', 'title', 'description', 'organism',
@@ -316,26 +335,25 @@ class QASampleMaker
   end
 
   def print_summary(total_time)
-    log "\n" + "="*60
-    log "QA SAMPLE SUMMARY"
-    log "="*60
-    log "Total processing time: #{total_time.round(2)} seconds"
-    log "Extracted records loaded: #{@extracted_records}"
-    log "Prediction records loaded: #{@prediction_records}"
-    log "Matched records: #{@matched_records}"
-    log "Final sample size: #{@final_sample_size}"
-    log ""
-    log "Output file: #{@output_file}"
-    log "Log file: #{@log_file}"
-    log "="*60
+    skipped_records = @extracted_records + @prediction_records - @matched_records
+    failed_records = 0
+
+    log(:info, "=== QA SAMPLE SUMMARY ===")
+    log(:info, "Total processing time: #{total_time.round(2)} seconds")
+    log(:info, "Extracted records loaded: #{@extracted_records}")
+    log(:info, "Prediction records loaded: #{@prediction_records}")
+    log(:info, "Successfully processed: #{@final_sample_size}")
+    log(:info, "Skipped records: #{skipped_records}")
+    log(:info, "Failed records: #{failed_records}")
+    log(:info, "Matched records: #{@matched_records}")
+    log(:info, "Output file: #{@output_file}")
+    log(:info, "Log file: #{@log_file}")
 
     if @final_sample_size > 0
-      log "QA sample creation completed successfully!"
+      log(:info, "=== QA SAMPLE END ===")
     else
-      log "WARNING: No matching records found!"
+      log(:warn, "=== QA SAMPLE END === (No matching records found)")
     end
-
-    @log_handle.close
   end
 end
 

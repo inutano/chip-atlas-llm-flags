@@ -63,16 +63,17 @@ class BioSampleExtractor
   end
 
   def run
-    @logger.info "Starting BioSample extraction from #{@input_file}"
-    @logger.info "Output file: #{@output_file}"
-    @logger.info "Log file: #{@log_file}"
+    log(:info, "=== EXTRACTION START ===")
+    log(:info, "Starting BioSample extraction from #{@input_file}")
+    log(:info, "Output file: #{@output_file}")
+    log(:info, "Log file: #{@log_file}")
 
     begin
       process_input_file
       print_summary
     rescue => e
-      @logger.error "Fatal error during processing: #{e.message}"
-      @logger.error e.backtrace.join("\n")
+      log(:error, "Fatal error during processing: #{e.message}")
+      log(:error, e.backtrace.join("\n"))
       exit 1
     end
   end
@@ -83,22 +84,31 @@ class BioSampleExtractor
     # Create output directory if it doesn't exist
     FileUtils.mkdir_p(@output_dir) unless Dir.exist?(@output_dir)
 
-    # Setup logger to write to both file and STDOUT
-    @logger = Logger.new(STDOUT)
+    # Setup dual logger (STDOUT + file)
+    @logger = Logger.new(MultiIO.new(STDOUT, File.open(@log_file, 'w')))
     @logger.level = Logger::INFO
     @logger.formatter = proc do |severity, datetime, progname, msg|
-      "#{datetime.strftime('%Y-%m-%d %H:%M:%S')} [#{severity}] #{msg}\n"
+      "#{datetime.iso8601} [#{severity}] #{msg}\n"
     end
-
-    # Also log to file
-    @file_logger = Logger.new(@log_file)
-    @file_logger.level = Logger::INFO
-    @file_logger.formatter = @logger.formatter
   end
 
-  def log_message(level, message)
+  def log(level, message)
     @logger.send(level, message)
-    @file_logger.send(level, message)
+  end
+
+  # Dual IO class for logging to multiple outputs
+  class MultiIO
+    def initialize(*targets)
+      @targets = targets
+    end
+
+    def write(*args)
+      @targets.each { |t| t.write(*args) }
+    end
+
+    def close
+      @targets.each(&:close)
+    end
   end
 
   def process_input_file
@@ -106,7 +116,7 @@ class BioSampleExtractor
       raise "Input file not found: #{@input_file}"
     end
 
-    log_message(:info, "Reading input file: #{@input_file}")
+    log(:info, "Reading input file: #{@input_file}")
 
     File.open(@output_file, 'w') do |output|
       begin
@@ -118,14 +128,14 @@ class BioSampleExtractor
         end
 
         @total_records = biosamples.length
-        log_message(:info, "Found #{@total_records} records to process")
+        log(:info, "Found #{@total_records} records to process")
 
         biosamples.each_with_index do |biosample, index|
           process_biosample(biosample, index, output)
         end
 
       rescue JSON::ParserError => e
-        log_message(:error, "Failed to parse JSON file: #{e.message}")
+        log(:error, "Failed to parse JSON file: #{e.message}")
         raise
       end
     end
@@ -137,16 +147,16 @@ class BioSampleExtractor
       unless biosample.is_a?(Hash)
         @skipped_records += 1
         @parse_errors += 1
-        log_message(:warn, "Record #{index + 1}: Not a valid object, skipping")
+        log(:warn, "Record #{index + 1}: Not a valid object, skipping")
         return
       end
 
-      # Extract BioSample ID (accession)
+      # Check for required accession field
       id = extract_biosample_id(biosample)
       unless id
         @skipped_records += 1
         @missing_accession_errors += 1
-        log_message(:warn, "Record #{index + 1}: No valid BioSample accession found, skipping")
+        log(:warn, "Record #{index + 1}: No valid BioSample accession found, skipping")
         return
       end
 
@@ -159,13 +169,13 @@ class BioSampleExtractor
 
       # Log progress every 1000 records
       if (@processed_records % 1000) == 0
-        log_message(:info, "Processed #{@processed_records} records...")
+        log(:info, "Processed #{@processed_records} records...")
       end
 
     rescue => e
       @skipped_records += 1
       @parse_errors += 1
-      log_message(:warn, "Record #{index + 1}: Error processing - #{e.message}")
+      log(:warn, "Record #{index + 1}: Error processing - #{e.message}")
     end
   end
 
@@ -323,22 +333,20 @@ class BioSampleExtractor
   end
 
   def print_summary
-    log_message(:info, "\n" + "="*50)
-    log_message(:info, "EXTRACTION SUMMARY")
-    log_message(:info, "="*50)
-    log_message(:info, "Total records found: #{@total_records}")
-    log_message(:info, "Successfully processed: #{@processed_records}")
-    log_message(:info, "Skipped records: #{@skipped_records}")
-    log_message(:info, "  - JSON parse errors: #{@parse_errors}")
-    log_message(:info, "  - Missing accession: #{@missing_accession_errors}")
-    log_message(:info, "Output file: #{@output_file}")
-    log_message(:info, "Log file: #{@log_file}")
-    log_message(:info, "="*50)
+    log(:info, "=== EXTRACTION SUMMARY ===")
+    log(:info, "Total records found: #{@total_records}")
+    log(:info, "Successfully processed: #{@processed_records}")
+    log(:info, "Skipped records: #{@skipped_records}")
+    log(:info, "Failed records: #{@parse_errors}")
+    log(:info, "  - JSON parse errors: #{@parse_errors}")
+    log(:info, "  - Missing accession: #{@missing_accession_errors}")
+    log(:info, "Output file: #{@output_file}")
+    log(:info, "Log file: #{@log_file}")
 
     if @processed_records > 0
-      log_message(:info, "Extraction completed successfully!")
+      log(:info, "=== EXTRACTION END ===")
     else
-      log_message(:warn, "No records were successfully processed!")
+      log(:warn, "=== EXTRACTION END === (No records processed)")
     end
   end
 end

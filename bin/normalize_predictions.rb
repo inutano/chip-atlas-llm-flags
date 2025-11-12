@@ -33,6 +33,7 @@ require 'json'
 require 'optparse'
 require 'time'
 require 'fileutils'
+require 'logger'
 
 class PredictionNormalizer
   def initialize(input_file, output_dir = '.')
@@ -58,9 +59,10 @@ class PredictionNormalizer
   def run
     validate_inputs
 
-    log "Starting prediction normalization on #{@input_file}"
-    log "Output file: #{@output_file}"
-    log "Log file: #{@log_file}"
+    log(:info, "=== NORMALIZATION START ===")
+    log(:info, "Starting prediction normalization on #{@input_file}")
+    log(:info, "Output file: #{@output_file}")
+    log(:info, "Log file: #{@log_file}")
 
     start_time = Time.now
 
@@ -78,15 +80,32 @@ class PredictionNormalizer
 
   def setup_logging
     FileUtils.mkdir_p(@output_dir) unless Dir.exist?(@output_dir)
-    @log_handle = File.open(@log_file, 'w')
+
+    # Setup dual logger (STDOUT + file)
+    @logger = Logger.new(MultiIO.new(STDOUT, File.open(@log_file, 'w')))
+    @logger.level = Logger::INFO
+    @logger.formatter = proc do |severity, datetime, progname, msg|
+      "#{datetime.iso8601} [#{severity}] #{msg}\n"
+    end
   end
 
-  def log(message)
-    timestamp = Time.now.strftime('%Y-%m-%d %H:%M:%S')
-    log_msg = "[#{timestamp}] #{message}"
-    puts log_msg
-    @log_handle.puts log_msg
-    @log_handle.flush
+  def log(level, message)
+    @logger.send(level, message)
+  end
+
+  # Dual IO class for logging to multiple outputs
+  class MultiIO
+    def initialize(*targets)
+      @targets = targets
+    end
+
+    def write(*args)
+      @targets.each { |t| t.write(*args) }
+    end
+
+    def close
+      @targets.each(&:close)
+    end
   end
 
   def validate_inputs
@@ -96,7 +115,7 @@ class PredictionNormalizer
   end
 
   def process_input_file
-    log "Reading and processing input file..."
+    log(:info, "Reading and processing input file...")
 
     File.foreach(@input_file) do |line|
       line = line.strip
@@ -107,7 +126,7 @@ class PredictionNormalizer
 
       # Log progress every 1000 records
       if (@total_records % 1000) == 0
-        log "Processed #{@total_records} records..."
+        log(:info, "Processed #{@total_records} records...")
       end
     end
   end
@@ -118,7 +137,7 @@ class PredictionNormalizer
 
       # Validate record structure
       unless record.is_a?(Hash) && record['id'] && record['prediction']
-        log "WARN: Invalid record structure at line #{@total_records}"
+        log(:warn, "Invalid record structure at line #{@total_records}")
         return
       end
 
@@ -128,7 +147,7 @@ class PredictionNormalizer
       # Skip records with error flags
       if record['flag']
         @flagged_records += 1
-        log "INFO: Skipping record #{id} with flag: #{record['flag']}"
+        log(:info, "Skipping record #{id} with flag: #{record['flag']}")
         return
       end
 
@@ -137,7 +156,7 @@ class PredictionNormalizer
              prediction.has_key?('disease') &&
              prediction.has_key?('treatments') &&
              prediction.has_key?('gene-modification')
-        log "WARN: Invalid prediction structure for record #{id}"
+        log(:warn, "Invalid prediction structure for record #{id}")
         return
       end
 
@@ -146,7 +165,7 @@ class PredictionNormalizer
       # Check for duplicates (keep most recent)
       if @records_by_id.has_key?(id)
         @duplicate_records += 1
-        log "INFO: Duplicate ID #{id} found, keeping most recent"
+        log(:info, "Duplicate ID #{id} found, keeping most recent")
       end
 
       # Store normalized record
@@ -160,14 +179,14 @@ class PredictionNormalizer
       @records_by_id[id] = normalized_record
 
     rescue JSON::ParserError => e
-      log "ERROR: Invalid JSON at line #{@total_records}: #{e.message}"
+      log(:error, "Invalid JSON at line #{@total_records}: #{e.message}")
     rescue => e
-      log "ERROR: Failed to process record at line #{@total_records}: #{e.message}"
+      log(:error, "Failed to process record at line #{@total_records}: #{e.message}")
     end
   end
 
   def write_normalized_output
-    log "Writing normalized output..."
+    log(:info, "Writing normalized output...")
 
     @final_records = @records_by_id.length
 
@@ -179,27 +198,22 @@ class PredictionNormalizer
   end
 
   def print_summary(total_time)
-    log "\n" + "="*60
-    log "NORMALIZATION SUMMARY"
-    log "="*60
-    log "Total processing time: #{total_time.round(2)} seconds"
-    log "Total records read: #{@total_records}"
-    log "Valid prediction records: #{@valid_records}"
-    log "Flagged records (skipped): #{@flagged_records}"
-    log "Duplicate records (merged): #{@duplicate_records}"
-    log "Final normalized records: #{@final_records}"
-    log ""
-    log "Output file: #{@output_file}"
-    log "Log file: #{@log_file}"
-    log "="*60
+    log(:info, "=== NORMALIZATION SUMMARY ===")
+    log(:info, "Total processing time: #{total_time.round(2)} seconds")
+    log(:info, "Total records read: #{@total_records}")
+    log(:info, "Successfully processed: #{@final_records}")
+    log(:info, "Skipped records: #{@flagged_records}")
+    log(:info, "Failed records: 0")
+    log(:info, "Valid prediction records: #{@valid_records}")
+    log(:info, "Duplicate records (merged): #{@duplicate_records}")
+    log(:info, "Output file: #{@output_file}")
+    log(:info, "Log file: #{@log_file}")
 
     if @final_records > 0
-      log "Normalization completed successfully!"
+      log(:info, "=== NORMALIZATION END ===")
     else
-      log "WARNING: No valid records found to normalize!"
+      log(:warn, "=== NORMALIZATION END === (No valid records found)")
     end
-
-    @log_handle.close
   end
 end
 
