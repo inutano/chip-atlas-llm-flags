@@ -1,0 +1,9 @@
+{"id":"SAMN11223344","title":"Normal human skin fibroblasts","description":"","organism":"","attributes":{"cell_type":"fibroblast","tissue":"skin","passage":"3"}}
+{"id":"INVALID123","title":"Invalid ID test","description":"This has an invalid ID","organism":"Homo sapiens","attributes":{"test":"value"}}
+{"id":"SAMN55667788","title":"Missing attributes test","description":"This record is missing attributes field","organism":"Mus musculus"}
+{"id":"SAMN99887766","title":"Invalid attributes test","description":"This has non-object attributes","organism":"Homo sapiens","attributes":"not an object"}
+{invalid json structure missing quotes and braces
+{"id":"","title":"Empty ID test","description":"This has an empty ID field","organism":"Homo sapiens","attributes":{"test":"value"}}
+{"title":"Missing ID entirely","description":"This record has no ID field at all","organism":"Homo sapiens","attributes":{"test":"value"}}
+not valid json at all - just plain text
+{"id":"SAMN12121212","attributes":{"complete":"record","with":"attributes"}}
