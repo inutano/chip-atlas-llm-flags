@@ -21,7 +21,7 @@
 #
 # OUTPUT FORMAT:
 #   Each line in the JSONL file contains a JSON object with extracted BioSample
-#   metadata including accession, attributes, and raw text for classification.
+#   metadata including id, title, description, organism, and attributes.
 #
 # ERROR HANDLING:
 #   - JSON parse errors: Skip record and log the parsing error
@@ -39,9 +39,10 @@
 #
 
 require 'json'
+require 'optparse'
 require 'logger'
 require 'time'
-require 'optparse'
+require 'fileutils'
 
 class BioSampleExtractor
   def initialize(input_file, output_dir = '.')
@@ -80,7 +81,7 @@ class BioSampleExtractor
 
   def setup_logger
     # Create output directory if it doesn't exist
-    Dir.mkdir(@output_dir) unless Dir.exist?(@output_dir)
+    FileUtils.mkdir_p(@output_dir) unless Dir.exist?(@output_dir)
 
     # Setup logger to write to both file and STDOUT
     @logger = Logger.new(STDOUT)
@@ -140,17 +141,17 @@ class BioSampleExtractor
         return
       end
 
-      # Check for required accession field
-      accession = biosample['accession'] || biosample['Accession']
-      unless accession
+      # Extract BioSample ID (accession)
+      id = extract_biosample_id(biosample)
+      unless id
         @skipped_records += 1
         @missing_accession_errors += 1
-        log_message(:warn, "Record #{index + 1}: Missing BioSample accession, skipping")
+        log_message(:warn, "Record #{index + 1}: No valid BioSample accession found, skipping")
         return
       end
 
       # Extract and structure the biosample data
-      extracted_data = extract_biosample_data(biosample, accession)
+      extracted_data = extract_biosample_data(biosample, id)
 
       # Write to output file
       output.puts(JSON.generate(extracted_data))
@@ -168,40 +169,157 @@ class BioSampleExtractor
     end
   end
 
-  def extract_biosample_data(biosample, accession)
-    {
-      accession: accession,
-      attributes: biosample['attributes'] || biosample['Attributes'] || {},
-      title: biosample['title'] || biosample['Title'] || '',
-      description: biosample['description'] || biosample['Description'] || '',
-      organism: biosample['organism'] || biosample['Organism'] || '',
-      extracted_at: Time.now.iso8601,
-      raw_text: extract_raw_text(biosample)
-    }
-  end
+  def extract_biosample_id(biosample)
+    # Look for BioSample accession in various possible fields
+    possible_id_fields = [
+      'accession', 'Accession', 'id', 'Id', 'ID',
+      'biosample_accession', 'BioSample_accession'
+    ]
 
-  def extract_raw_text(biosample)
-    # Combine various text fields for classification analysis
-    text_fields = []
-
-    # Add title and description
-    text_fields << biosample['title'] if biosample['title']
-    text_fields << biosample['Title'] if biosample['Title']
-    text_fields << biosample['description'] if biosample['description']
-    text_fields << biosample['Description'] if biosample['Description']
-
-    # Add attribute values if present
-    if biosample['attributes'].is_a?(Hash)
-      biosample['attributes'].each_value do |value|
-        text_fields << value.to_s if value
-      end
-    elsif biosample['Attributes'].is_a?(Hash)
-      biosample['Attributes'].each_value do |value|
-        text_fields << value.to_s if value
+    possible_id_fields.each do |field|
+      if biosample[field]
+        id = biosample[field].to_s.strip
+        # Check if it matches BioSample accession pattern (SAMN*, SAMD*, SAMEA*)
+        if id.match?(/^SAM[NDE][A-Z]?\d+$/)
+          return id
+        end
       end
     end
 
-    text_fields.join(' ').strip
+    nil
+  end
+
+  def extract_title_or_name(biosample)
+    # Look for title, name, or sample_name (first found)
+    possible_name_fields = [
+      'title', 'Title', 'name', 'Name', 'sample_name', 'Sample_name',
+      'sample_title', 'Sample_title', 'sampleName', 'SampleName'
+    ]
+
+    possible_name_fields.each do |field|
+      if biosample[field] && !biosample[field].to_s.strip.empty?
+        return biosample[field].to_s.strip
+      end
+    end
+
+    ''
+  end
+
+  def extract_description(biosample)
+    # Look for description field
+    possible_desc_fields = ['description', 'Description', 'desc', 'Desc']
+
+    possible_desc_fields.each do |field|
+      if biosample[field] && !biosample[field].to_s.strip.empty?
+        return biosample[field].to_s.strip
+      end
+    end
+
+    ''
+  end
+
+  def extract_organism(biosample)
+    # Look for organism information and combine scientific name and TaxID if both exist
+    organism_info = []
+
+    # Look for scientific name
+    scientific_name_fields = [
+      'organism', 'Organism', 'scientific_name', 'Scientific_name',
+      'species', 'Species', 'organism_name', 'Organism_name'
+    ]
+
+    scientific_name = nil
+    scientific_name_fields.each do |field|
+      if biosample[field] && !biosample[field].to_s.strip.empty?
+        scientific_name = biosample[field].to_s.strip
+        break
+      end
+    end
+
+    # Look for TaxID
+    taxid_fields = [
+      'taxid', 'TaxID', 'tax_id', 'Tax_ID', 'taxonomy_id', 'Taxonomy_ID',
+      'ncbi_taxid', 'NCBI_TaxID'
+    ]
+
+    taxid = nil
+    taxid_fields.each do |field|
+      if biosample[field] && !biosample[field].to_s.strip.empty?
+        taxid = biosample[field].to_s.strip
+        break
+      end
+    end
+
+    # Combine scientific name and TaxID if both exist
+    if scientific_name && taxid
+      "#{scientific_name} (TaxID: #{taxid})"
+    elsif scientific_name
+      scientific_name
+    elsif taxid
+      "TaxID: #{taxid}"
+    else
+      ''
+    end
+  end
+
+  def extract_attributes(biosample)
+    # Extract attributes, preserving original key spelling
+    attributes = {}
+
+    # Look for attributes in common field names
+    attr_fields = ['attributes', 'Attributes', 'attr', 'Attr']
+
+    attr_fields.each do |field|
+      if biosample[field].is_a?(Hash)
+        biosample[field].each do |key, value|
+          # Skip if value is nil or empty
+          next if value.nil? || (value.respond_to?(:empty?) && value.empty?)
+          attributes[key] = value
+        end
+        break
+      end
+    end
+
+    # Also include other fields that aren't metadata fields, excluding unwanted ones
+    excluded_fields = [
+      'accession', 'Accession', 'id', 'Id', 'ID', 'biosample_accession', 'BioSample_accession',
+      'title', 'Title', 'name', 'Name', 'sample_name', 'Sample_name', 'sample_title', 'Sample_title',
+      'sampleName', 'SampleName', 'description', 'Description', 'desc', 'Desc',
+      'organism', 'Organism', 'scientific_name', 'Scientific_name', 'species', 'Species',
+      'organism_name', 'Organism_name', 'taxid', 'TaxID', 'tax_id', 'Tax_ID',
+      'taxonomy_id', 'Taxonomy_ID', 'ncbi_taxid', 'NCBI_TaxID',
+      'attributes', 'Attributes', 'attr', 'Attr',
+      'links', 'Links', 'externalReferences', 'ExternalReferences', 'external_references',
+      'dates', 'Dates', 'date', 'Date', 'created', 'Created', 'updated', 'Updated',
+      'submission_date', 'Submission_date', 'publication_date', 'Publication_date'
+    ]
+
+    biosample.each do |key, value|
+      # Skip excluded fields and fields that start with common date/link patterns
+      next if excluded_fields.include?(key)
+      next if key.to_s.downcase.include?('date')
+      next if key.to_s.downcase.include?('link')
+      next if key.to_s.downcase.include?('reference')
+      next if key.to_s.downcase.include?('url')
+      next if value.nil? || (value.respond_to?(:empty?) && value.empty?)
+
+      # Only include simple values (strings, numbers, booleans)
+      if value.is_a?(String) || value.is_a?(Numeric) || value.is_a?(TrueClass) || value.is_a?(FalseClass)
+        attributes[key] = value
+      end
+    end
+
+    attributes
+  end
+
+  def extract_biosample_data(biosample, id)
+    {
+      id: id,
+      title: extract_title_or_name(biosample),
+      description: extract_description(biosample),
+      organism: extract_organism(biosample),
+      attributes: extract_attributes(biosample)
+    }
   end
 
   def print_summary
