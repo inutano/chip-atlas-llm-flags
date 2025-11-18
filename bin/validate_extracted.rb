@@ -39,11 +39,29 @@ class ExtractedDataValidator
     @skipped_records = 0
     @failed_records = 0
 
-    # Generate log file name based on input file
-    base_name = File.basename(@input_file, '.*')
-    log_file = "validated_#{base_name}_#{Time.now.strftime('%Y%m%d_%H%M%S')}.log"
+    # Use the same directory as the input file if it's in an output directory
+    @output_dir = detect_output_directory(@input_file, '.')
+    log_file = File.join(@output_dir, "validation.log")
 
     setup_logger(log_file)
+  end
+
+  def detect_output_directory(input_file, base_output_dir)
+    # Use the same directory as the input file if it's in an output directory
+    input_dir = File.dirname(input_file)
+    if input_dir =~ /output\/(\d{8}_\d{6})$/
+      return input_dir
+    end
+
+    # Try to extract timestamp from input file path
+    if input_file =~ /output\/(\d{8}_\d{6})\//
+      timestamp_dir = $1
+      output_dir = File.join(base_output_dir, "output", timestamp_dir)
+      return output_dir if Dir.exist?(output_dir)
+    end
+
+    # Fallback: use current directory
+    base_output_dir
   end
 
   def validate

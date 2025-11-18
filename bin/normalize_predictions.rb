@@ -38,10 +38,12 @@ require 'logger'
 class PredictionNormalizer
   def initialize(input_file, output_dir = '.')
     @input_file = input_file
-    @output_dir = output_dir
-    @timestamp = Time.now.strftime('%Y%m%d_%H%M%S')
-    @output_file = File.join(@output_dir, "normalized_predictions_#{@timestamp}.jsonl")
-    @log_file = File.join(@output_dir, "normalized_predictions_#{@timestamp}.log")
+    @base_output_dir = output_dir
+
+    # Use the same directory as the input file if it's in an output directory
+    @output_dir = detect_output_directory(@input_file, @base_output_dir)
+    @output_file = File.join(@output_dir, "normalized_predictions.jsonl")
+    @log_file = File.join(@output_dir, "normalized_predictions.log")
 
     # Statistics
     @total_records = 0
@@ -54,6 +56,27 @@ class PredictionNormalizer
     @records_by_id = {}
 
     setup_logging
+  end
+
+  def detect_output_directory(input_file, base_output_dir)
+    # Use the same directory as the input file if it's in an output directory
+    input_dir = File.dirname(input_file)
+    if input_dir =~ /output\/(\d{8}_\d{6})$/
+      return input_dir
+    end
+
+    # Try to extract timestamp from input file path
+    if input_file =~ /output\/(\d{8}_\d{6})\//
+      timestamp_dir = $1
+      output_dir = File.join(base_output_dir, "output", timestamp_dir)
+      return output_dir if Dir.exist?(output_dir)
+    end
+
+    # Fallback: create new timestamped directory
+    timestamp = Time.now.strftime('%Y%m%d_%H%M%S')
+    output_dir = File.join(base_output_dir, "output", timestamp)
+    FileUtils.mkdir_p(output_dir)
+    output_dir
   end
 
   def run

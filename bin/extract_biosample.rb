@@ -47,10 +47,11 @@ require 'fileutils'
 class BioSampleExtractor
   def initialize(input_file, output_dir = '.')
     @input_file = input_file
-    @output_dir = output_dir
+    @base_output_dir = output_dir
     @timestamp = Time.now.strftime('%Y%m%d_%H%M%S')
-    @output_file = File.join(@output_dir, "biosample_extracted_#{@timestamp}.jsonl")
-    @log_file = File.join(@output_dir, "biosample_extracted_#{@timestamp}.log")
+    @output_dir = File.join(@base_output_dir, "output", @timestamp)
+    @output_file = File.join(@output_dir, "biosample_extracted.jsonl")
+    @log_file = File.join(@output_dir, "biosample_extracted.log")
 
     # Initialize counters for summary
     @total_records = 0
@@ -116,29 +117,118 @@ class BioSampleExtractor
       raise "Input file not found: #{@input_file}"
     end
 
+    # Create output directory
+    FileUtils.mkdir_p(@output_dir)
+
     log(:info, "Reading input file: #{@input_file}")
 
     File.open(@output_file, 'w') do |output|
-      begin
-        json_content = File.read(@input_file)
-        biosamples = JSON.parse(json_content)
-
-        unless biosamples.is_a?(Array)
-          raise "Input JSON must contain an array of BioSample objects"
-        end
-
-        @total_records = biosamples.length
-        log(:info, "Found #{@total_records} records to process")
-
-        biosamples.each_with_index do |biosample, index|
-          process_biosample(biosample, index, output)
-        end
-
-      rescue JSON::ParserError => e
-        log(:error, "Failed to parse JSON file: #{e.message}")
-        raise
+      # Detect file format and process accordingly
+      if jsonl_format?(@input_file)
+        log(:info, "Detected JSONL format, processing line by line")
+        process_jsonl_file(output)
+      else
+        log(:info, "Detected JSON array format, processing as array")
+        process_json_array_file(output)
       end
     end
+  end
+
+  def jsonl_format?(file_path)
+    # Read first line and check if it's a standalone JSON object
+    first_line = File.open(file_path, 'r') { |f| f.readline.strip rescue "" }
+    return false if first_line.empty?
+
+    begin
+      JSON.parse(first_line)
+      # If we can parse the first line as JSON, check if the whole file is a JSON array
+      full_content = File.read(file_path).strip
+      return !full_content.start_with?('[')
+    rescue JSON::ParserError
+      return false
+    end
+  end
+
+  def process_json_array_file(output)
+    begin
+      json_content = File.read(@input_file)
+      biosamples = JSON.parse(json_content)
+
+      unless biosamples.is_a?(Array)
+        raise "Input JSON must contain an array of BioSample objects"
+      end
+
+      @total_records = biosamples.length
+      log(:info, "Found #{@total_records} records to process")
+
+      biosamples.each_with_index do |biosample, index|
+        process_biosample(biosample, index, output)
+      end
+
+    rescue JSON::ParserError => e
+      log(:error, "Failed to parse JSON file: #{e.message}")
+      raise
+    end
+  end
+
+  def process_jsonl_file(output)
+    records = []
+    line_number = 0
+
+    File.foreach(@input_file) do |line|
+      line_number += 1
+      line = line.strip
+      next if line.empty?
+
+      begin
+        record = JSON.parse(line)
+        transformed_record = transform_biosample_structure(record)
+        records << transformed_record
+      rescue JSON::ParserError => e
+        log(:warn, "Skipping line #{line_number}: Invalid JSON - #{e.message}")
+        next
+      end
+    end
+
+    @total_records = records.length
+    log(:info, "Found #{@total_records} records to process")
+
+    records.each_with_index do |biosample, index|
+      process_biosample(biosample, index, output)
+    end
+  end
+
+  def transform_biosample_structure(record)
+    # Handle biosample_id + entry structure (your data format)
+    if record["biosample_id"] && record["entry"]
+      log(:debug, "Transforming biosample_id + entry structure for record: #{record["biosample_id"]}")
+
+      # Start with entry data
+      transformed = record["entry"].dup
+
+      # Map biosample_id to accession
+      transformed["accession"] = record["biosample_id"]
+
+      # Preserve other top-level fields (like srx) as attributes
+      record.each do |key, value|
+        next if key == "biosample_id" || key == "entry"
+        transformed["additional_#{key}"] = value
+      end
+
+      return transformed
+    end
+
+    # Handle flat structure with biosample_id field
+    if record["biosample_id"] && !record["accession"]
+      log(:debug, "Mapping biosample_id to accession for record: #{record["biosample_id"]}")
+      record = record.dup
+      record["accession"] = record["biosample_id"]
+      record.delete("biosample_id")
+      return record
+    end
+
+    # Return as-is for standard structures
+    record
   end
 
   def process_biosample(biosample, index, output)

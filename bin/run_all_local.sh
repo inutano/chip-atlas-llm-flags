@@ -44,15 +44,26 @@ print_completion() {
     echo ""
 }
 
-# Function to find the most recent file matching a pattern
-find_latest_file() {
-    local pattern=$1
-    local latest=$(ls -t $pattern 2>/dev/null | head -n1)
-    if [[ -z "$latest" ]]; then
-        echo "ERROR: No files found matching pattern: $pattern" >&2
+# Function to find the most recent output directory
+find_latest_output_dir() {
+    local latest_dir=$(ls -td output/*/ 2>/dev/null | head -n1)
+    if [[ -z "$latest_dir" ]]; then
+        echo "ERROR: No output directories found" >&2
         exit 1
     fi
-    echo "$latest"
+    echo "${latest_dir%/}"  # Remove trailing slash
+}
+
+# Function to find file in output directory
+find_file_in_output_dir() {
+    local output_dir=$1
+    local filename=$2
+    local filepath="$output_dir/$filename"
+    if [[ ! -f "$filepath" ]]; then
+        echo "ERROR: File not found: $filepath" >&2
+        exit 1
+    fi
+    echo "$filepath"
 }
 
 # Parse command line arguments
@@ -94,8 +105,10 @@ step_start=$(date +%s)
 print_step "1" "Extract BioSample Data"
 
 ruby bin/extract_biosample.rb "$INPUT_JSON"
-latest_extracted=$(find_latest_file "biosample_extracted_*.jsonl")
+latest_output_dir=$(find_latest_output_dir)
+latest_extracted=$(find_file_in_output_dir "$latest_output_dir" "biosample_extracted.jsonl")
 echo "Latest extracted file: $latest_extracted"
+echo "Output directory: $latest_output_dir"
 
 print_completion $step_start
 
@@ -112,7 +125,7 @@ step_start=$(date +%s)
 print_step "3" "Run Local LLM Inference"
 
 ruby bin/run_llama_local.rb "$latest_extracted" $LLM_ARGS
-latest_predictions=$(find_latest_file "biosample_predictions_*.jsonl")
+latest_predictions=$(find_file_in_output_dir "$latest_output_dir" "biosample_predictions.jsonl")
 echo "Latest predictions file: $latest_predictions"
 
 print_completion $step_start
@@ -122,7 +135,7 @@ step_start=$(date +%s)
 print_step "4" "Normalize Predictions"
 
 ruby bin/normalize_predictions.rb "$latest_predictions"
-latest_normalized=$(find_latest_file "normalized_predictions_*.jsonl")
+latest_normalized=$(find_file_in_output_dir "$latest_output_dir" "normalized_predictions.jsonl")
 echo "Latest normalized file: $latest_normalized"
 
 print_completion $step_start
@@ -132,7 +145,7 @@ step_start=$(date +%s)
 print_step "5" "Create QA Sample"
 
 ruby bin/make_qa_sample.rb "$latest_extracted" "$latest_normalized" --n 200
-latest_qa_sample=$(find_latest_file "qa_sample_*.tsv")
+latest_qa_sample=$(find_file_in_output_dir "$latest_output_dir" "qa_sample.tsv")
 echo "Latest QA sample file: $latest_qa_sample"
 
 print_completion $step_start
@@ -142,11 +155,13 @@ echo "========================================="
 echo "PIPELINE COMPLETED SUCCESSFULLY"
 echo "========================================="
 echo "Input file: $INPUT_JSON"
+echo "Output directory: $latest_output_dir"
 echo "Final outputs:"
 echo "  - Extracted: $latest_extracted"
 echo "  - Predictions: $latest_predictions"
 echo "  - Normalized: $latest_normalized"
 echo "  - QA Sample: $latest_qa_sample"
 echo ""
+echo "All output files are organized in: $latest_output_dir"
 echo "Completed at: $(date '+%Y-%m-%d %H:%M:%S')"
 echo "========================================="

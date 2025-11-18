@@ -42,12 +42,13 @@ class LlamaLocalRunner
     @model_path = options[:model_path]
     @ctx_size = options[:ctx_size] || 4096
     @batch_size = options[:batch_size] || 8
-    @output_dir = options[:output_dir] || '.'
+    @base_output_dir = options[:output_dir] || '.'
     @binary_path = options[:binary_path] || 'llama-cli'
 
-    @timestamp = Time.now.strftime('%Y%m%d_%H%M%S')
-    @output_file = File.join(@output_dir, "biosample_predictions_#{@timestamp}.jsonl")
-    @log_file = File.join(@output_dir, "biosample_predictions_#{@timestamp}.log")
+    # Try to detect existing timestamped directory from input file path
+    @output_dir = detect_output_directory(@input_file, @base_output_dir)
+    @output_file = File.join(@output_dir, "biosample_predictions.jsonl")
+    @log_file = File.join(@output_dir, "biosample_predictions.log")
 
     # Statistics
     @total_processed = 0
@@ -86,6 +87,27 @@ class LlamaLocalRunner
   end
 
   private
+
+  def detect_output_directory(input_file, base_output_dir)
+    # Try to extract timestamp from input file path
+    if input_file =~ /output\/(\d{8}_\d{6})\//
+      timestamp_dir = $1
+      output_dir = File.join(base_output_dir, "output", timestamp_dir)
+      return output_dir if Dir.exist?(output_dir)
+    end
+
+    # If input file is in an output directory, use that
+    input_dir = File.dirname(input_file)
+    if input_dir =~ /output\/(\d{8}_\d{6})$/
+      return input_dir
+    end
+
+    # Fallback: create new timestamped directory
+    timestamp = Time.now.strftime('%Y%m%d_%H%M%S')
+    output_dir = File.join(base_output_dir, "output", timestamp)
+    FileUtils.mkdir_p(output_dir)
+    output_dir
+  end
 
   def setup_logging
     FileUtils.mkdir_p(@output_dir) unless Dir.exist?(@output_dir)
@@ -269,7 +291,7 @@ class LlamaLocalRunner
       '--temp', '0',
       '--top-p', '0.9',
       '--n-predict', '64',
-      '--prompt-file', prompt_file,
+      '--file', prompt_file,
       '--no-display-prompt'
     ]
 

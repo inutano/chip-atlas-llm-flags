@@ -1,0 +1,566 @@
+[
+  {
+    "biosample_id": "SAMD00004141",
+    "srx": "DRX000546",
+    "entry": {
+      "access": "public",
+      "publication_date": "2013-01-07T00:00:00+09:00",
+      "last_update": "2014-11-12T17:28:52+09:00",
+      "Ids": {
+        "Id": [
+          {
+            "is_primary": "1",
+            "namespace": "BioSample",
+            "content": "SAMD00004141"
+          },
+          {
+            "namespace": "SRA",
+            "content": "DRS000576"
+          }
+        ]
+      },
+      "Description": {
+        "SampleName": "DRS000576",
+        "Title": "Hela_Ser2P/Ser5P/Ser7P-RNAP2_ChIPSeq",
+        "Organism": {
+          "taxonomy_id": "9606",
+          "OrganismName": "Homo sapiens"
+        }
+      },
+      "Owner": {
+        "Name": {
+          "abbreviation": "SSP Stem Cell Unit., School of Medicine, Kyushu University",
+          "content": "SSP Stem Cell Unit., School of Medicine, Kyushu University"
+        }
+      },
+      "Models": {
+        "Model": [
+          {
+            "content": "Generic"
+          }
+        ]
+      },
+      "Attributes": {
+        "Attribute": [
+          {
+            "attribute_name": "sample_name",
+            "content": "DRS000576"
+          },
+          {
+            "attribute_name": "sample comment",
+            "content": "Hela cells which were cultured in Dulbecco's modified Eagle's medium (DMEM) supplemented with 10% fetal bovine serum under a humidified atmosphere with 5% CO2 at 37°C."
+          }
+        ]
+      },
+      "accession": "SAMD00004141"
+    }
+  },
+  {
+    "biosample_id": "SAMD00008684",
+    "srx": "DRX000550",
+    "entry": {
+      "access": "public",
+      "publication_date": "2012-10-20T00:00:00+09:00",
+      "last_update": "2014-11-12T17:29:13+09:00",
+      "Ids": {
+        "Id": [
+          {
+            "is_primary": "1",
+            "namespace": "BioSample",
+            "content": "SAMD00008684"
+          },
+          {
+            "namespace": "SRA",
+            "content": "DRS000579"
+          }
+        ]
+      },
+      "Description": {
+        "SampleName": "DRS000579",
+        "Title": "SH-SY5Y ChIP",
+        "Organism": {
+          "taxonomy_id": "9606",
+          "OrganismName": "Homo sapiens"
+        }
+      },
+      "Owner": {
+        "Name": {
+          "abbreviation": "Laboratory of Biomolecular Science, Faculty of Pharmaceutical Sciences, Hokkaido University",
+          "content": "Laboratory of Biomolecular Science, Faculty of Pharmaceutical Sciences, Hokkaido University"
+        }
+      },
+      "Models": {
+        "Model": [
+          {
+            "content": "Generic"
+          }
+        ]
+      },
+      "Attributes": {
+        "Attribute": [
+          {
+            "attribute_name": "sample_name",
+            "content": "DRS000579"
+          },
+          {
+            "attribute_name": "sample comment",
+            "content": "Source of DNA used for sequencing was ChIP samples from SH-SY5Y cells using anti-DJ-1 antibody."
+          },
+          {
+            "attribute_name": "cell type",
+            "content": "SH-SY5Y cells"
+          }
+        ]
+      },
+      "accession": "SAMD00008684"
+    }
+  },
+  {
+    "biosample_id": "SAMD00009960",
+    "srx": "DRX000744",
+    "entry": {
+      "access": "public",
+      "publication_date": "2014-04-17T00:00:00+09:00",
+      "last_update": "2014-11-12T17:29:18+09:00",
+      "Ids": {
+        "Id": [
+          {
+            "is_primary": "1",
+            "namespace": "BioSample",
+            "content": "SAMD00009960"
+          },
+          {
+            "namespace": "SRA",
+            "content": "DRS000710"
+          }
+        ]
+      },
+      "Description": {
+        "SampleName": "DRS000710",
+        "Title": "Ramos_IgM_WCE",
+        "Organism": {
+          "taxonomy_id": "9606",
+          "OrganismName": "Homo sapiens"
+        }
+      },
+      "Owner": {
+        "Name": {
+          "abbreviation": "Laboratory of Functional Genomics, Department of Medical Genome Sciences, Graduate School of Frontier Sciences, The University of Tokyo",
+          "content": "Laboratory of Functional Genomics, Department of Medical Genome Sciences, Graduate School of Frontier Sciences, The University of Tokyo"
+        }
+      },
+      "Models": {
+        "Model": [
+          {
+            "content": "Generic"
+          }
+        ]
+      },
+      "Attributes": {
+        "Attribute": [
+          {
+            "attribute_name": "sample_name",
+            "content": "DRS000710"
+          },
+          {
+            "attribute_name": "sample comment",
+            "content": "source: Human Burkitt's lymphoma cells stimulated with IgM and non-stimulated with IL-4; \ndescription: chip-seq library, whole cell extract."
+          }
+        ]
+      },
+      "accession": "SAMD00009960"
+    }
+  },
+  {
+    "biosample_id": "SAMD00009334",
+    "srx": "DRX000745",
+    "entry": {
+      "access": "public",
+      "publication_date": "2014-04-17T00:00:00+09:00",
+      "last_update": "2014-11-12T17:29:16+09:00",
+      "Ids": {
+        "Id": [
+          {
+            "is_primary": "1",
+            "namespace": "BioSample",
+            "content": "SAMD00009334"
+          },
+          {
+            "namespace": "SRA",
+            "content": "DRS000711"
+          }
+        ]
+      },
+      "Description": {
+        "SampleName": "DRS000711",
+        "Title": "Ramos_IL4_IgM_WCE",
+        "Organism": {
+          "taxonomy_id": "9606",
+          "OrganismName": "Homo sapiens"
+        }
+      },
+      "Owner": {
+        "Name": {
+          "abbreviation": "Laboratory of Functional Genomics, Department of Medical Genome Sciences, Graduate School of Frontier Sciences, The University of Tokyo",
+          "content": "Laboratory of Functional Genomics, Department of Medical Genome Sciences, Graduate School of Frontier Sciences, The University of Tokyo"
+        }
+      },
+      "Models": {
+        "Model": [
+          {
+            "content": "Generic"
+          }
+        ]
+      },
+      "Attributes": {
+        "Attribute": [
+          {
+            "attribute_name": "sample_name",
+            "content": "DRS000711"
+          },
+          {
+            "attribute_name": "sample comment",
+            "content": "source: Human Burkitt's lymphoma cells stimulated with IgM and IL-4; \ndescription: chip-seq library, whole cell extract."
+          }
+        ]
+      },
+      "accession": "SAMD00009334"
+    }
+  },
+  {
+    "biosample_id": "SAMD00004027",
+    "srx": "DRX000746",
+    "entry": {
+      "access": "public",
+      "publication_date": "2014-04-17T00:00:00+09:00",
+      "last_update": "2014-11-12T17:28:52+09:00",
+      "Ids": {
+        "Id": [
+          {
+            "is_primary": "1",
+            "namespace": "BioSample",
+            "content": "SAMD00004027"
+          },
+          {
+            "namespace": "SRA",
+            "content": "DRS000712"
+          }
+        ]
+      },
+      "Description": {
+        "SampleName": "DRS000712",
+        "Title": "Ramos_IgM_ChIP",
+        "Organism": {
+          "taxonomy_id": "9606",
+          "OrganismName": "Homo sapiens"
+        }
+      },
+      "Owner": {
+        "Name": {
+          "abbreviation": "Laboratory of Functional Genomics, Department of Medical Genome Sciences, Graduate School of Frontier Sciences, The University of Tokyo",
+          "content": "Laboratory of Functional Genomics, Department of Medical Genome Sciences, Graduate School of Frontier Sciences, The University of Tokyo"
+        }
+      },
+      "Models": {
+        "Model": [
+          {
+            "content": "Generic"
+          }
+        ]
+      },
+      "Attributes": {
+        "Attribute": [
+          {
+            "attribute_name": "sample_name",
+            "content": "DRS000712"
+          },
+          {
+            "attribute_name": "sample comment",
+            "content": "source: Human Burkitt's lymphoma cells with stimulated IgM and non-stimulated IL4; \ndescription: chip-seq library, immunoprecipitated sample."
+          }
+        ]
+      },
+      "accession": "SAMD00004027"
+    }
+  },
+  {
+    "biosample_id": "SAMD00006263",
+    "srx": "DRX000747",
+    "entry": {
+      "access": "public",
+      "publication_date": "2014-04-17T00:00:00+09:00",
+      "last_update": "2014-11-12T17:29:02+09:00",
+      "Ids": {
+        "Id": [
+          {
+            "is_primary": "1",
+            "namespace": "BioSample",
+            "content": "SAMD00006263"
+          },
+          {
+            "namespace": "SRA",
+            "content": "DRS000713"
+          }
+        ]
+      },
+      "Description": {
+        "SampleName": "DRS000713",
+        "Title": "Ramos_IL4_IgM_ChIP",
+        "Organism": {
+          "taxonomy_id": "9606",
+          "OrganismName": "Homo sapiens"
+        }
+      },
+      "Owner": {
+        "Name": {
+          "abbreviation": "Laboratory of Functional Genomics, Department of Medical Genome Sciences, Graduate School of Frontier Sciences, The University of Tokyo",
+          "content": "Laboratory of Functional Genomics, Department of Medical Genome Sciences, Graduate School of Frontier Sciences, The University of Tokyo"
+        }
+      },
+      "Models": {
+        "Model": [
+          {
+            "content": "Generic"
+          }
+        ]
+      },
+      "Attributes": {
+        "Attribute": [
+          {
+            "attribute_name": "sample_name",
+            "content": "DRS000713"
+          },
+          {
+            "attribute_name": "sample comment",
+            "content": "source: Human Burkitt's lymphoma cells stimulated with IgM and IL4; \ndescription: chip-seq library, immunoprecipitated sample."
+          }
+        ]
+      },
+      "accession": "SAMD00006263"
+    }
+  },
+  {
+    "biosample_id": "SAMD00008869",
+    "srx": "DRX001457",
+    "entry": {
+      "access": "public",
+      "publication_date": "2014-04-23T00:00:00+09:00",
+      "last_update": "2014-11-12T17:29:14+09:00",
+      "Ids": {
+        "Id": [
+          {
+            "is_primary": "1",
+            "namespace": "BioSample",
+            "content": "SAMD00008869"
+          },
+          {
+            "namespace": "SRA",
+            "content": "DRS001415"
+          }
+        ]
+      },
+      "Description": {
+        "SampleName": "DRS001415",
+        "Title": "Comprehensive identification and characterization of the distribution of nucleosomes",
+        "Organism": {
+          "taxonomy_id": "9606",
+          "OrganismName": "Homo sapiens"
+        }
+      },
+      "Owner": {
+        "Name": {
+          "abbreviation": "Radiation Research Center for Frontier Science Facilities for Gene Technology, Research Institute for Radiation Biology and Medicine, Hiroshima University",
+          "content": "Radiation Research Center for Frontier Science Facilities for Gene Technology, Research Institute for Radiation Biology and Medicine, Hiroshima University"
+        }
+      },
+      "Models": {
+        "Model": [
+          {
+            "content": "Generic"
+          }
+        ]
+      },
+      "Attributes": {
+        "Attribute": [
+          {
+            "attribute_name": "sample_name",
+            "content": "DRS001415"
+          },
+          {
+            "attribute_name": "sample comment",
+            "content": "Nucleosomes were obtained by micrococcal nuclease treatment from the ML-2 human leukemia cell line, which expresses the MLL-AF6 fusion protein but not the wild type MLL protein. The nucleosomal DNAs were analyzed by deep sequencing."
+          }
+        ]
+      },
+      "accession": "SAMD00008869"
+    }
+  },
+  {
+    "biosample_id": "SAMD00013671",
+    "srx": "DRX001458",
+    "entry": {
+      "access": "public",
+      "publication_date": "2014-04-23T00:00:00+09:00",
+      "last_update": "2014-11-12T17:29:34+09:00",
+      "Ids": {
+        "Id": [
+          {
+            "is_primary": "1",
+            "namespace": "BioSample",
+            "content": "SAMD00013671"
+          },
+          {
+            "namespace": "SRA",
+            "content": "DRS001416"
+          }
+        ]
+      },
+      "Description": {
+        "SampleName": "DRS001416",
+        "Title": "Comprehensive identification and characterization of the distribution of tri-methylated Histone H3 lysine 36 (H3K36me3)",
+        "Organism": {
+          "taxonomy_id": "9606",
+          "OrganismName": "Homo sapiens"
+        }
+      },
+      "Owner": {
+        "Name": {
+          "abbreviation": "Radiation Research Center for Frontier Science Facilities for Gene Technology, Research Institute for Radiation Biology and Medicine, Hiroshima University",
+          "content": "Radiation Research Center for Frontier Science Facilities for Gene Technology, Research Institute for Radiation Biology and Medicine, Hiroshima University"
+        }
+      },
+      "Models": {
+        "Model": [
+          {
+            "content": "Generic"
+          }
+        ]
+      },
+      "Attributes": {
+        "Attribute": [
+          {
+            "attribute_name": "sample_name",
+            "content": "DRS001416"
+          },
+          {
+            "attribute_name": "sample comment",
+            "content": "Chromatin was obtained from the ML-2 human leukemia cell line, which expresses the MLL-AF6 fusion protein but not the wild type MLL protein. ChIP was performed using anti-H3K36me3 antibody and the precipitated DNAs were analyzed by deep sequencing."
+          }
+        ]
+      },
+      "accession": "SAMD00013671"
+    }
+  },
+  {
+    "biosample_id": "SAMD00003407",
+    "srx": "DRX001459",
+    "entry": {
+      "access": "public",
+      "publication_date": "2014-04-23T00:00:00+09:00",
+      "last_update": "2014-11-12T17:28:49+09:00",
+      "Ids": {
+        "Id": [
+          {
+            "is_primary": "1",
+            "namespace": "BioSample",
+            "content": "SAMD00003407"
+          },
+          {
+            "namespace": "SRA",
+            "content": "DRS001417"
+          }
+        ]
+      },
+      "Description": {
+        "SampleName": "DRS001417",
+        "Title": "Comprehensive identification and characterization of the binding sites of RNA polymerase II",
+        "Organism": {
+          "taxonomy_id": "9606",
+          "OrganismName": "Homo sapiens"
+        }
+      },
+      "Owner": {
+        "Name": {
+          "abbreviation": "Radiation Research Center for Frontier Science Facilities for Gene Technology, Research Institute for Radiation Biology and Medicine, Hiroshima University",
+          "content": "Radiation Research Center for Frontier Science Facilities for Gene Technology, Research Institute for Radiation Biology and Medicine, Hiroshima University"
+        }
+      },
+      "Models": {
+        "Model": [
+          {
+            "content": "Generic"
+          }
+        ]
+      },
+      "Attributes": {
+        "Attribute": [
+          {
+            "attribute_name": "sample_name",
+            "content": "DRS001417"
+          },
+          {
+            "attribute_name": "sample comment",
+            "content": "Chromatin was obtained from the ML-2 human leukemia cell line, which expresses the MLL-AF6 fusion protein but not the wild type MLL protein. ChIP was performed using anti-RNA polymerase II antibody and the precipitated DNAs were analyzed by deep sequencing."
+          }
+        ]
+      },
+      "accession": "SAMD00003407"
+    }
+  },
+  {
+    "biosample_id": "SAMD00003710",
+    "srx": "DRX001460",
+    "entry": {
+      "access": "public",
+      "publication_date": "2014-04-23T00:00:00+09:00",
+      "last_update": "2014-11-12T17:28:50+09:00",
+      "Ids": {
+        "Id": [
+          {
+            "is_primary": "1",
+            "namespace": "BioSample",
+            "content": "SAMD00003710"
+          },
+          {
+            "namespace": "SRA",
+            "content": "DRS001418"
+          }
+        ]
+      },
+      "Description": {
+        "SampleName": "DRS001418",
+        "Title": "Comprehensive identification and characterization of the binding sites of MLL-AF6",
+        "Organism": {
+          "taxonomy_id": "9606",
+          "OrganismName": "Homo sapiens"
+        }
+      },
+      "Owner": {
+        "Name": {
+          "abbreviation": "Radiation Research Center for Frontier Science Facilities for Gene Technology, Research Institute for Radiation Biology and Medicine, Hiroshima University",
+          "content": "Radiation Research Center for Frontier Science Facilities for Gene Technology, Research Institute for Radiation Biology and Medicine, Hiroshima University"
+        }
+      },
+      "Models": {
+        "Model": [
+          {
+            "content": "Generic"
+          }
+        ]
+      },
+      "Attributes": {
+        "Attribute": [
+          {
+            "attribute_name": "sample_name",
+            "content": "DRS001418"
+          },
+          {
+            "attribute_name": "sample comment",
+            "content": "Chromatin was obtained from the ML-2 human leukemia cell line, which expresses the MLL-AF6 fusion protein but not the wild type MLL protein. ChIP was performed using anti-MLL antibody and the precipitated DNAs were analyzed by deep sequencing."
+          }
+        ]
+      },
+      "accession": "SAMD00003710"
+    }
+  }
+]
