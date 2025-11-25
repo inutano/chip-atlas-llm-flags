@@ -44,10 +44,11 @@ require 'csv'
 class BioSampleExtractor
   def initialize(input_file, output_dir = '.')
     @input_file = input_file
-    @output_dir = output_dir
+    @base_output_dir = output_dir
     @timestamp = Time.now.strftime('%Y%m%d_%H%M%S')
-    @output_file = File.join(@output_dir, "biosample_extracted_#{@timestamp}.jsonl")
-    @log_file = File.join(@output_dir, "biosample_extracted_#{@timestamp}.log")
+    @output_dir = File.join(@base_output_dir, @timestamp)
+    @output_file = File.join(@output_dir, "biosample_extracted.jsonl")
+    @log_file = File.join(@output_dir, "biosample_extracted.log")
 
     # Initialize counters for summary
     @total_records = 0
@@ -78,7 +79,7 @@ class BioSampleExtractor
   private
 
   def setup_logger
-    # Create output directory if it doesn't exist
+    # Create timestamped output directory if it doesn't exist
     FileUtils.mkdir_p(@output_dir) unless Dir.exist?(@output_dir)
 
     # Setup dual logger (STDOUT + file)
