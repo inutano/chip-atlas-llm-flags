@@ -1,41 +1,37 @@
 #!/usr/bin/env ruby
 
-# extract_biosample.rb - BioSample metadata extraction script
+# extract_biosample.rb - Multi-format BioSample extraction script
 #
 # USAGE:
-#   ruby bin/extract_biosample.rb INPUT_JSON [--outdir OUTDIR]
+#   ruby bin/extract_biosample.rb INPUT_FILE [--outdir OUTDIR]
 #
 # DESCRIPTION:
-#   This script processes a JSON file containing an array of BioSample objects
-#   and extracts structured metadata for classification analysis. The script
-#   reads BioSample JSON data, validates each record, and outputs processed
-#   records in JSONL format for downstream processing.
+#   This script processes input files in multiple formats and extracts structured
+#   metadata for classification analysis. Supports both JSON BioSample arrays and
+#   TSV experimentList.tab format.
+#
+# SUPPORTED FORMATS:
+#   - JSON: Array of BioSample objects (original format)
+#   - TSV: experimentList.tab format with columns:
+#     Column 1: Experiment ID (used as id)
+#     Column 9: Title
+#     Column 10: Key=value pairs (semicolon separated, parsed into attributes)
 #
 # ARGUMENTS:
-#   INPUT_JSON    Path to input JSON file containing BioSample array
+#   INPUT_FILE    Path to input file (JSON or TSV format)
 #   --outdir      Output directory (optional, defaults to current directory)
 #
 # OUTPUT FILES:
-#   - biosample_extracted_YYYYMMDD_HHMMSS.jsonl - Extracted BioSample records
+#   - biosample_extracted_YYYYMMDD_HHMMSS.jsonl - Extracted records
 #   - biosample_extracted_YYYYMMDD_HHMMSS.log    - Processing log file
 #
 # OUTPUT FORMAT:
-#   Each line in the JSONL file contains a JSON object with extracted BioSample
-#   metadata including id, title, description, organism, and attributes.
-#
-# ERROR HANDLING:
-#   - JSON parse errors: Skip record and log the parsing error
-#   - Missing BioSample accession: Skip record and log missing accession
-#   - Invalid records: Skip and continue processing with detailed logging
-#
-# LOGGING:
-#   Uses Ruby's Logger class to output messages to both STDOUT and log file.
-#   Log levels: INFO for normal processing, WARN for skipped records,
-#   ERROR for critical issues.
+#   Each line in the JSONL file contains a JSON object with extracted metadata
+#   including id, title, description, organism, and attributes.
 #
 # EXAMPLES:
 #   ruby bin/extract_biosample.rb data/biosamples.json
-#   ruby bin/extract_biosample.rb data/biosamples.json --outdir output/
+#   ruby bin/extract_biosample.rb data/experimentList.tab --outdir output/
 #
 
 require 'json'
@@ -43,15 +39,15 @@ require 'optparse'
 require 'logger'
 require 'time'
 require 'fileutils'
+require 'csv'
 
 class BioSampleExtractor
   def initialize(input_file, output_dir = '.')
     @input_file = input_file
-    @base_output_dir = output_dir
+    @output_dir = output_dir
     @timestamp = Time.now.strftime('%Y%m%d_%H%M%S')
-    @output_dir = File.join(@base_output_dir, "output", @timestamp)
-    @output_file = File.join(@output_dir, "biosample_extracted.jsonl")
-    @log_file = File.join(@output_dir, "biosample_extracted.log")
+    @output_file = File.join(@output_dir, "biosample_extracted_#{@timestamp}.jsonl")
+    @log_file = File.join(@output_dir, "biosample_extracted_#{@timestamp}.log")
 
     # Initialize counters for summary
     @total_records = 0
@@ -117,39 +113,151 @@ class BioSampleExtractor
       raise "Input file not found: #{@input_file}"
     end
 
-    # Create output directory
-    FileUtils.mkdir_p(@output_dir)
-
     log(:info, "Reading input file: #{@input_file}")
 
+    # Detect file format
+    format = detect_file_format(@input_file)
+    log(:info, "Detected format: #{format.upcase}")
+
     File.open(@output_file, 'w') do |output|
-      # Detect file format and process accordingly
-      if jsonl_format?(@input_file)
-        log(:info, "Detected JSONL format, processing line by line")
-        process_jsonl_file(output)
+      case format
+      when :json
+        process_json_file(output)
+      when :tsv
+        process_tsv_file(output)
       else
-        log(:info, "Detected JSON array format, processing as array")
-        process_json_array_file(output)
+        raise "Unsupported file format: #{format}"
       end
     end
   end
 
-  def jsonl_format?(file_path)
-    # Read first line and check if it's a standalone JSON object
-    first_line = File.open(file_path, 'r') { |f| f.readline.strip rescue "" }
-    return false if first_line.empty?
+  def detect_file_format(file_path)
+    # Check file extension first
+    case File.extname(file_path).downcase
+    when '.json'
+      return :json
+    when '.tab', '.tsv', '.txt'
+      return :tsv
+    end
 
-    begin
-      JSON.parse(first_line)
-      # If we can parse the first line as JSON, check if the whole file is a JSON array
-      full_content = File.read(file_path).strip
-      return !full_content.start_with?('[')
-    rescue JSON::ParserError
-      return false
+    # Check content if extension is ambiguous
+    first_line = File.open(file_path, 'r') { |f| f.readline.strip rescue "" }
+
+    if first_line.start_with?('[') || first_line.start_with?('{')
+      :json
+    elsif first_line.include?("\t")
+      :tsv
+    else
+      # Default to JSON for unknown formats
+      log(:warn, "Unable to determine format from extension or content, defaulting to JSON")
+      :json
     end
   end
 
-  def process_json_array_file(output)
+  def process_tsv_file(output)
+    log(:info, "Processing TSV format (experimentList.tab)")
+    log(:info, "Column mapping: 1=ID, 9=Title, 10=Attributes")
+
+    line_number = 0
+
+    begin
+      CSV.foreach(@input_file, col_sep: "\t", headers: false) do |row|
+        line_number += 1
+        @total_records += 1
+
+        # Skip empty rows
+        if row.nil? || row.compact.empty?
+          log(:warn, "Line #{line_number}: Empty row, skipping")
+          @skipped_records += 1
+          next
+        end
+
+        # Extract data according to column specification (1-indexed in spec, 0-indexed in array)
+        experiment_id = row[0]&.strip   # Column 1
+        title = row[8]&.strip           # Column 9 (0-indexed = 8)
+        attributes_str = row[9]&.strip  # Column 10 (0-indexed = 9)
+
+        # Validate experiment ID
+        unless valid_experiment_id?(experiment_id)
+          @skipped_records += 1
+          @missing_accession_errors += 1
+          log(:warn, "Line #{line_number}: Invalid or missing experiment ID '#{experiment_id}', skipping")
+          next
+        end
+
+        # Parse attributes
+        attributes = parse_key_value_pairs(attributes_str || '')
+
+        # Create biosample record
+        biosample_record = {
+          'id' => experiment_id,
+          'title' => title || '',
+          'description' => '', # Not available in TSV format
+          'organism' => '',    # Not available in TSV format
+          'attributes' => attributes
+        }
+
+        # Write to output
+        output.puts(JSON.generate(biosample_record))
+        @processed_records += 1
+
+        # Log progress every 1000 records
+        if (@processed_records % 1000) == 0
+          log(:info, "Processed #{@processed_records} records...")
+        end
+
+      rescue CSV::MalformedCSVError => e
+        @parse_errors += 1
+        @skipped_records += 1
+        log(:warn, "Line #{line_number}: Malformed TSV - #{e.message}")
+        next
+      end
+
+    rescue => e
+      log(:error, "Error processing TSV file: #{e.message}")
+      raise
+    end
+  end
+
+  def parse_key_value_pairs(attributes_str)
+    attributes = {}
+    return attributes if attributes_str.nil? || attributes_str.empty?
+
+    # Split by semicolon and parse key=value pairs
+    attributes_str.split(';').each do |pair|
+      pair = pair.strip
+      next if pair.empty?
+
+      # Split on first '=' to handle values that contain '='
+      key, value = pair.split('=', 2)
+      next unless key && value
+
+      key = key.strip
+      value = value.strip
+
+      # Add to attributes if both key and value are non-empty
+      if !key.empty? && !value.empty?
+        attributes[key] = value
+      end
+    end
+
+    attributes
+  end
+
+  def valid_experiment_id?(id)
+    # For TSV format, we accept various experiment ID formats
+    return false if id.nil? || id.empty?
+
+    # Basic validation: non-empty, reasonable length, printable characters
+    return false if id.length > 100  # Reasonable maximum length
+    return false if id.match?(/[[:cntrl:]]/)  # No control characters
+
+    true
+  end
+
+  def process_json_file(output)
+    log(:info, "Processing JSON format (BioSample array)")
+
     begin
       json_content = File.read(@input_file)
       biosamples = JSON.parse(json_content)
@@ -162,7 +270,7 @@ class BioSampleExtractor
       log(:info, "Found #{@total_records} records to process")
 
       biosamples.each_with_index do |biosample, index|
-        process_biosample(biosample, index, output)
+        process_json_biosample(biosample, index, output)
       end
 
     rescue JSON::ParserError => e
@@ -171,67 +279,7 @@ class BioSampleExtractor
     end
   end
 
-  def process_jsonl_file(output)
-    records = []
-    line_number = 0
-
-    File.foreach(@input_file) do |line|
-      line_number += 1
-      line = line.strip
-      next if line.empty?
-
-      begin
-        record = JSON.parse(line)
-        transformed_record = transform_biosample_structure(record)
-        records << transformed_record
-      rescue JSON::ParserError => e
-        log(:warn, "Skipping line #{line_number}: Invalid JSON - #{e.message}")
-        next
-      end
-    end
-
-    @total_records = records.length
-    log(:info, "Found #{@total_records} records to process")
-
-    records.each_with_index do |biosample, index|
-      process_biosample(biosample, index, output)
-    end
-  end
-
-  def transform_biosample_structure(record)
-    # Handle biosample_id + entry structure (your data format)
-    if record["biosample_id"] && record["entry"]
-      log(:debug, "Transforming biosample_id + entry structure for record: #{record["biosample_id"]}")
-
-      # Start with entry data
-      transformed = record["entry"].dup
-
-      # Map biosample_id to accession
-      transformed["accession"] = record["biosample_id"]
-
-      # Preserve other top-level fields (like srx) as attributes
-      record.each do |key, value|
-        next if key == "biosample_id" || key == "entry"
-        transformed["additional_#{key}"] = value
-      end
-
-      return transformed
-    end
-
-    # Handle flat structure with biosample_id field
-    if record["biosample_id"] && !record["accession"]
-      log(:debug, "Mapping biosample_id to accession for record: #{record["biosample_id"]}")
-      record = record.dup
-      record["accession"] = record["biosample_id"]
-      record.delete("biosample_id")
-      return record
-    end
-
-    # Return as-is for standard structures
-    record
-  end
-
-  def process_biosample(biosample, index, output)
+  def process_json_biosample(biosample, index, output)
     begin
       # Validate that biosample is a hash
       unless biosample.is_a?(Hash)
@@ -446,7 +494,7 @@ def parse_arguments
   options = {}
 
   OptionParser.new do |opts|
-    opts.banner = "Usage: ruby bin/extract_biosample.rb INPUT_JSON [--outdir OUTDIR]"
+    opts.banner = "Usage: ruby bin/extract_biosample.rb INPUT_FILE [--outdir OUTDIR]"
 
     opts.on("--outdir OUTDIR", "Output directory (default: current directory)") do |outdir|
       options[:outdir] = outdir
@@ -454,14 +502,18 @@ def parse_arguments
 
     opts.on("-h", "--help", "Show this help message") do
       puts opts
+      puts ""
+      puts "Supported formats:"
+      puts "  JSON: Array of BioSample objects"
+      puts "  TSV:  experimentList.tab with columns 1=ID, 9=Title, 10=Attributes"
       exit
     end
   end.parse!
 
   # Validate required argument
   if ARGV.empty?
-    puts "Error: INPUT_JSON file is required"
-    puts "Usage: ruby bin/extract_biosample.rb INPUT_JSON [--outdir OUTDIR]"
+    puts "Error: INPUT_FILE is required"
+    puts "Usage: ruby bin/extract_biosample.rb INPUT_FILE [--outdir OUTDIR]"
     exit 1
   end
 

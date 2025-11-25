@@ -31,9 +31,10 @@ Raw BioSample JSON → Extract → Validate → Inference → Normalize → QA S
 ```
 
 ### Step 3: Data Extraction (`bin/extract_biosample.rb`)
-- Extracts BioSample records with valid accessions (SAMN*, SAMD*, SAMEA*)
-- Combines title, description, organism, and attributes
-- Filters out links, external references, and dates
+- **JSON Format**: Extracts BioSample records with valid accessions (SAMN*, SAMD*, SAMEA*)
+- **TSV Format**: Processes experimentList.tab files (Column 1=ID, Column 9=Title, Column 10=Key=value attributes)
+- Auto-detects input format based on file extension and content
+- Combines title, description, organism, and attributes into unified structure
 - **Output**: `biosample_extracted_YYYYMMDD_HHMMSS.jsonl`
 
 ### Step 4: Data Validation (`bin/validate_extracted.rb`)
@@ -90,8 +91,9 @@ bash bin/run_all_local.sh input.json --model model.gguf
 
 ### Manual Step-by-Step Execution
 ```bash
-# Step 1: Extract BioSample data
+# Step 1: Extract BioSample data (JSON or TSV format)
 ruby bin/extract_biosample.rb biosamples.json --outdir output/
+ruby bin/extract_biosample.rb experimentList.tab --outdir output/
 
 # Step 2: Validate extracted data
 ruby bin/validate_extracted.rb output/biosample_extracted_*.jsonl
@@ -115,7 +117,9 @@ ruby bin/make_qa_sample.rb output/biosample_extracted_*.jsonl \
 
 ## Input/Output Examples
 
-### Input Example
+### Input Examples
+
+**JSON Format** (biosamples.json):
 ```json
 [
   {
@@ -134,10 +138,19 @@ ruby bin/make_qa_sample.rb output/biosample_extracted_*.jsonl \
 ]
 ```
 
-### Output Example
+**TSV Format** (experimentList.tab):
+```
+EXP001	sample1	ChIP-seq	Homo sapiens	9606	2023-01-15	PRJNA123456	SRX123456	MCF-7 breast cancer cells	cell_line=MCF-7;disease=adenocarcinoma;treatment=doxorubicin;concentration=1µM
+```
+Column mapping: 1=Experiment ID, 9=Title, 10=Key=value pairs (semicolon separated)
+
+### Output Examples
+Both input formats produce the same output structure:
+
 **Normalized Predictions** (`normalized_predictions_*.jsonl`):
 ```json
 {"id":"SAMN12345678","disease":true,"treatments":true,"gene-modification":false}
+{"id":"EXP001","disease":true,"treatments":true,"gene-modification":false}
 ```
 
 **QA Sample** (`qa_sample_*.tsv`):
@@ -186,9 +199,10 @@ See [BENCHMARK.md](BENCHMARK.md) for detailed performance metrics and optimizati
 
 ### Common Issues
 
-**"No valid BioSample accession found"**
-- Ensure input records have `accession` field with format SAMN*, SAMD*, or SAMEA*
-- Check that accession fields are not empty or malformed
+**"No valid BioSample accession found" (JSON) / "Invalid experiment ID" (TSV)**
+- **JSON**: Ensure records have `accession` field with format SAMN*, SAMD*, or SAMEA*
+- **TSV**: Verify Column 1 contains valid experiment IDs (non-empty, reasonable length)
+- Check that ID fields are not empty or malformed
 
 **"LLM binary not found or not working"**
 - Verify llama.cpp installation and model path
@@ -216,6 +230,10 @@ See [BENCHMARK.md](BENCHMARK.md) for detailed performance metrics and optimizati
 # Test extraction on small sample
 head -n 10 large_input.json > test_small.json
 ruby bin/extract_biosample.rb test_small.json
+
+# Test TSV format
+head -n 5 experimentList.tab > test_small.tab
+ruby bin/extract_biosample.rb test_small.tab
 
 # Validate specific file
 ruby bin/validate_extracted.rb extracted_file.jsonl
