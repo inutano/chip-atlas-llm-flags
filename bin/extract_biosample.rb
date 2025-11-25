@@ -158,59 +158,68 @@ class BioSampleExtractor
     log(:info, "Processing TSV format (experimentList.tab)")
     log(:info, "Column mapping: 1=ID, 9=Title, 10=Attributes")
 
+
+
     line_number = 0
 
     begin
-      CSV.foreach(@input_file, col_sep: "\t", headers: false) do |row|
+      File.foreach(@input_file) do |line|
         line_number += 1
         @total_records += 1
 
-        # Skip empty rows
-        if row.nil? || row.compact.empty?
-          log(:warn, "Line #{line_number}: Empty row, skipping")
+        # Skip empty lines
+        line = line.strip
+        if line.empty?
+          log(:warn, "Line #{line_number}: Empty line, skipping")
           @skipped_records += 1
           next
         end
 
-        # Extract data according to column specification (1-indexed in spec, 0-indexed in array)
-        experiment_id = row[0]&.strip   # Column 1
-        title = row[8]&.strip           # Column 9 (0-indexed = 8)
-        attributes_str = row[9]&.strip  # Column 10 (0-indexed = 9)
+        begin
+          # Split by tabs, handling potential quoting issues
+          columns = line.split("\t")
 
-        # Validate experiment ID
-        unless valid_experiment_id?(experiment_id)
+          # Extract data according to column specification (1-indexed in spec, 0-indexed in array)
+          experiment_id = columns[0]&.strip   # Column 1
+          title = columns[8]&.strip           # Column 9 (0-indexed = 8)
+          attributes_str = columns[9]&.strip  # Column 10 (0-indexed = 9)
+
+          # Validate experiment ID
+          unless valid_experiment_id?(experiment_id)
+            @skipped_records += 1
+            @missing_accession_errors += 1
+            log(:warn, "Line #{line_number}: Invalid or missing experiment ID '#{experiment_id}', skipping")
+            next
+          end
+
+          # Parse attributes
+          attributes = parse_key_value_pairs(attributes_str || '')
+
+          # Create biosample record
+          biosample_record = {
+            'id' => experiment_id,
+            'title' => title || '',
+            'description' => '', # Not available in TSV format
+            'organism' => '',    # Not available in TSV format
+            'attributes' => attributes
+          }
+
+          # Write to output
+          output.puts(JSON.generate(biosample_record))
+          @processed_records += 1
+
+          # Log progress every 1000 records
+          if (@processed_records % 1000) == 0
+            log(:info, "Processed #{@processed_records} records...")
+          end
+
+        rescue => e
+          @parse_errors += 1
           @skipped_records += 1
-          @missing_accession_errors += 1
-          log(:warn, "Line #{line_number}: Invalid or missing experiment ID '#{experiment_id}', skipping")
+          log(:warn, "Line #{line_number}: Error parsing line - #{e.message}")
+          log(:warn, "Line content (first 100 chars): '#{line[0..99]}'") if line
           next
         end
-
-        # Parse attributes
-        attributes = parse_key_value_pairs(attributes_str || '')
-
-        # Create biosample record
-        biosample_record = {
-          'id' => experiment_id,
-          'title' => title || '',
-          'description' => '', # Not available in TSV format
-          'organism' => '',    # Not available in TSV format
-          'attributes' => attributes
-        }
-
-        # Write to output
-        output.puts(JSON.generate(biosample_record))
-        @processed_records += 1
-
-        # Log progress every 1000 records
-        if (@processed_records % 1000) == 0
-          log(:info, "Processed #{@processed_records} records...")
-        end
-
-      rescue CSV::MalformedCSVError => e
-        @parse_errors += 1
-        @skipped_records += 1
-        log(:warn, "Line #{line_number}: Malformed TSV - #{e.message}")
-        next
       end
 
     rescue => e
@@ -223,8 +232,11 @@ class BioSampleExtractor
     attributes = {}
     return attributes if attributes_str.nil? || attributes_str.empty?
 
+    # Clean up potential quoting issues in the attributes string
+    clean_str = attributes_str.gsub(/^"|"$/, '').gsub(/\\"|""/, '"')
+
     # Split by semicolon and parse key=value pairs
-    attributes_str.split(';').each do |pair|
+    clean_str.split(';').each do |pair|
       pair = pair.strip
       next if pair.empty?
 
@@ -234,6 +246,10 @@ class BioSampleExtractor
 
       key = key.strip
       value = value.strip
+
+      # Clean up any remaining quote issues in key and value
+      key = key.gsub(/^"|"$/, '').gsub(/\\"|""/, '"')
+      value = value.gsub(/^"|"$/, '').gsub(/\\"|""/, '"')
 
       # Add to attributes if both key and value are non-empty
       if !key.empty? && !value.empty?
