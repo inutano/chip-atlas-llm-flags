@@ -19,7 +19,7 @@
 #
 # ARGUMENTS:
 #   INPUT_FILE    Path to input file (JSON or TSV format)
-#   --outdir      Output directory (optional, defaults to current directory)
+#   --outdir      Output directory (optional, defaults to output directory)
 #
 # OUTPUT FILES:
 #   - biosample_extracted_YYYYMMDD_HHMMSS.jsonl - Extracted records
@@ -42,7 +42,7 @@ require 'fileutils'
 require 'csv'
 
 class BioSampleExtractor
-  def initialize(input_file, output_dir = '.')
+  def initialize(input_file, output_dir = 'output')
     @input_file = input_file
     @base_output_dir = output_dir
     @timestamp = Time.now.strftime('%Y%m%d_%H%M%S')
@@ -513,7 +513,7 @@ def parse_arguments
   OptionParser.new do |opts|
     opts.banner = "Usage: ruby bin/extract_biosample.rb INPUT_FILE [--outdir OUTDIR]"
 
-    opts.on("--outdir OUTDIR", "Output directory (default: current directory)") do |outdir|
+    opts.on("--outdir OUTDIR", "Output directory (default: output directory)") do |outdir|
       options[:outdir] = outdir
     end
 
@@ -535,7 +535,7 @@ def parse_arguments
   end
 
   options[:input_file] = ARGV[0]
-  options[:outdir] ||= '.'
+  options[:outdir] ||= 'output'
 
   options
 end
