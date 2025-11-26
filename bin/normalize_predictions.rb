@@ -43,6 +43,7 @@ class PredictionNormalizer
     # Use the same directory as the input file if it's in an output directory
     @output_dir = detect_output_directory(@input_file, @base_output_dir)
     @output_file = File.join(@output_dir, "normalized_predictions.jsonl")
+    @tsv_output_file = File.join(@output_dir, "normalized_predictions.tsv")
     @log_file = File.join(@output_dir, "normalized_predictions.log")
 
     # Statistics
@@ -213,9 +214,34 @@ class PredictionNormalizer
 
     @final_records = @records_by_id.length
 
+    # Write JSONL format
     File.open(@output_file, 'w') do |output|
       @records_by_id.each_value do |record|
         output.puts JSON.generate(record)
+      end
+    end
+
+    # Write TSV format
+    write_tsv_output
+  end
+
+  def write_tsv_output
+    log(:info, "Writing TSV output...")
+
+    require 'csv'
+
+    CSV.open(@tsv_output_file, 'w', col_sep: "\t") do |tsv|
+      # Write header
+      tsv << ['id', 'disease', 'treatments', 'gene-modification']
+
+      # Write data rows
+      @records_by_id.each_value do |record|
+        tsv << [
+          record['id'],
+          record['disease'],
+          record['treatments'],
+          record['gene-modification']
+        ]
       end
     end
   end
@@ -229,7 +255,8 @@ class PredictionNormalizer
     log(:info, "Failed records: 0")
     log(:info, "Valid prediction records: #{@valid_records}")
     log(:info, "Duplicate records (merged): #{@duplicate_records}")
-    log(:info, "Output file: #{@output_file}")
+    log(:info, "Output JSONL file: #{@output_file}")
+    log(:info, "Output TSV file: #{@tsv_output_file}")
     log(:info, "Log file: #{@log_file}")
 
     if @final_records > 0
