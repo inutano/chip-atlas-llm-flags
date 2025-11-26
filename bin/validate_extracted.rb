@@ -1,18 +1,18 @@
 #!/usr/bin/env ruby
 
-# validate_extracted.rb - Validates extracted BioSample JSONL files
+# validate_extracted.rb - Validates extracted BioSample and experiment JSONL files
 #
 # USAGE:
 #   ruby bin/validate_extracted.rb INPUT_JSONL
 #
 # DESCRIPTION:
-#   This script validates extracted BioSample JSONL files to ensure they meet
+#   This script validates extracted BioSample and experiment JSONL files to ensure they meet
 #   the expected format and data requirements. It checks each line for valid
 #   JSON structure and required field formats.
 #
 # VALIDATION CHECKS:
 #   - Each line must be valid JSON
-#   - 'id' field must start with "SAM"
+#   - 'id' field must start with "SAM", "SRX", "ERX", or "DRX"
 #   - 'attributes' field must be an object (hash)
 #   - Missing title, description, or organism are replaced with empty strings
 #
@@ -22,6 +22,7 @@
 #
 # EXAMPLES:
 #   ruby bin/validate_extracted.rb output/biosample_extracted_20231201_120000.jsonl
+#   ruby bin/validate_extracted.rb output/experiment_extracted_20231201_120000.jsonl
 #
 
 require 'json'
@@ -149,8 +150,8 @@ class ExtractedDataValidator
     if id.nil? || id.to_s.strip.empty?
       add_error("Missing 'id' field")
       @failed_records += 1
-    elsif !id.to_s.start_with?('SAM')
-      add_error("'id' field does not start with 'SAM': #{id}")
+    elsif !id.to_s.match?(/^(SAM|SRX|ERX|DRX)/)
+      add_error("'id' field does not start with valid prefix (SAM/SRX/ERX/DRX): #{id}")
       @failed_records += 1
     end
   end
@@ -213,7 +214,7 @@ def parse_arguments
   if ARGV.empty?
     puts "Usage: ruby bin/validate_extracted.rb INPUT_JSONL"
     puts ""
-    puts "Validates extracted BioSample JSONL files for correct format and required fields."
+    puts "Validates extracted BioSample and experiment JSONL files for correct format and required fields."
     exit 1
   end
 
