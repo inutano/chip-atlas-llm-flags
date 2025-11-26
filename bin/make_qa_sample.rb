@@ -37,7 +37,7 @@ class QASampleMaker
     @extracted_file = extracted_file
     @normalized_file = normalized_file
     @sample_size = options[:sample_size]
-    @base_output_dir = options[:output_dir] || '.'
+    @base_output_dir = normalize_base_output_dir(options[:output_dir] || '.')
 
     # Use the same directory as the input files if they're in an output directory
     @output_dir = detect_output_directory(@normalized_file, @base_output_dir)
@@ -73,9 +73,17 @@ class QASampleMaker
 
     # Fallback: create new timestamped directory
     timestamp = Time.now.strftime('%Y%m%d_%H%M%S')
-    output_dir = File.join(base_output_dir, "output", timestamp)
+    output_dir = File.join(base_output_dir, timestamp)
     FileUtils.mkdir_p(output_dir)
     output_dir
+  end
+
+  def normalize_base_output_dir(base_dir)
+    # If base_dir is current directory, use the 'output' subdirectory
+    if base_dir == '.' || base_dir == './'
+      return 'output'
+    end
+    base_dir
   end
 
   def run

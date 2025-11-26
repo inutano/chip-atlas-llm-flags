@@ -45,6 +45,9 @@ class LlamaLocalRunner
     @base_output_dir = options[:output_dir] || '.'
     @binary_path = options[:binary_path] || 'llama-cli'
 
+    # Normalize base output directory
+    @base_output_dir = normalize_base_output_dir(@base_output_dir)
+
     # Try to detect existing timestamped directory from input file path
     @output_dir = detect_output_directory(@input_file, @base_output_dir)
     @output_file = File.join(@output_dir, "biosample_predictions.jsonl")
@@ -104,9 +107,17 @@ class LlamaLocalRunner
 
     # Fallback: create new timestamped directory
     timestamp = Time.now.strftime('%Y%m%d_%H%M%S')
-    output_dir = File.join(base_output_dir, "output", timestamp)
+    output_dir = File.join(base_output_dir, timestamp)
     FileUtils.mkdir_p(output_dir)
     output_dir
+  end
+
+  def normalize_base_output_dir(base_dir)
+    # If base_dir is current directory, use the 'output' subdirectory
+    if base_dir == '.' || base_dir == './'
+      return 'output'
+    end
+    base_dir
   end
 
   def setup_logging
