@@ -124,6 +124,8 @@ class BioSampleExtractor
       case format
       when :json
         process_json_file(output)
+      when :jsonl
+        process_jsonl_file(output)
       when :tsv
         process_tsv_file(output)
       else
@@ -137,6 +139,8 @@ class BioSampleExtractor
     case File.extname(file_path).downcase
     when '.json'
       return :json
+    when '.jsonl'
+      return :jsonl
     when '.tab', '.tsv', '.txt'
       return :tsv
     end
@@ -296,6 +300,39 @@ class BioSampleExtractor
     end
   end
 
+  def process_jsonl_file(output)
+    log(:info, "Processing JSONL format (line-by-line JSON)")
+
+    line_number = 0
+    @total_records = 0
+
+    # First pass: count total records
+    File.foreach(@input_file) do |line|
+      line = line.strip
+      next if line.empty?
+      @total_records += 1
+    end
+
+    log(:info, "Found #{@total_records} records to process")
+
+    # Second pass: process records
+    File.foreach(@input_file) do |line|
+      line = line.strip
+      next if line.empty?
+
+      begin
+        biosample = JSON.parse(line)
+        process_json_biosample(biosample, line_number, output)
+        line_number += 1
+      rescue JSON::ParserError => e
+        log(:error, "Failed to parse JSON on line #{line_number + 1}: #{e.message}")
+        @skipped_records += 1
+        line_number += 1
+        next
+      end
+    end
+  end
+
   def process_json_biosample(biosample, index, output)
     begin
       # Validate that biosample is a hash
@@ -337,7 +374,7 @@ class BioSampleExtractor
   def extract_biosample_id(biosample)
     # Look for BioSample accession in various possible fields
     possible_id_fields = [
-      'accession', 'Accession', 'id', 'Id', 'ID',
+      'biosample_id', 'accession', 'Accession', 'id', 'Id', 'ID',
       'biosample_accession', 'BioSample_accession'
     ]
 

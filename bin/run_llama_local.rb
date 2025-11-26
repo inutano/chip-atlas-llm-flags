@@ -125,7 +125,7 @@ class LlamaLocalRunner
 
     # Setup dual logger (STDOUT + file)
     @logger = Logger.new(MultiIO.new(STDOUT, File.open(@log_file, 'w')))
-    @logger.level = Logger::INFO
+    @logger.level = ENV['DEBUG'] ? Logger::DEBUG : Logger::INFO
     @logger.formatter = proc do |severity, datetime, progname, msg|
       "#{datetime.iso8601} [#{severity}] #{msg}\n"
     end
@@ -235,13 +235,17 @@ class LlamaLocalRunner
     attrs_text = attributes.map { |k, v| "#{k}: #{v}" }.join("\n")
 
     # Replace template variables
-    prompt = @prompt_template.dup
-    prompt.gsub!('{TITLE_OR_NAME}', title)
-    prompt.gsub!('{DESCRIPTION}', description)
-    prompt.gsub!('{ORGANISM_OR_TAXID}', organism)
-    prompt.gsub!('{KEY1}: {VAL1}\n{KEY2}: {VAL2}\n...', attrs_text)
+    content = @prompt_template.dup
+    content.gsub!('{TITLE_OR_NAME}', title)
+    content.gsub!('{DESCRIPTION}', description)
+    content.gsub!('{ORGANISM_OR_TAXID}', organism)
+    # Replace the template pattern with actual newlines
+    content.gsub!(/\{KEY1\}: \{VAL1\}\n\{KEY2\}: \{VAL2\}\n\.\.\./, attrs_text)
 
-    prompt
+    # Format as Qwen2.5 chat template
+    chat_prompt = "<|im_start|>system\nYou are a helpful assistant that extracts information and returns only JSON responses.<|im_end|>\n<|im_start|>user\n#{content}<|im_end|>\n<|im_start|>assistant\n"
+
+    chat_prompt
   end
 
   def run_llm_inference(prompt)
@@ -303,16 +307,17 @@ class LlamaLocalRunner
       '--top-p', '0.9',
       '--n-predict', '64',
       '--file', prompt_file,
-      '--no-display-prompt'
+      '--no-display-prompt',
+      '--no-conversation'
     ]
 
     # Execute command
     stdout, stderr, status = Open3.capture3(*cmd)
 
     # Debug logging
-    log "DEBUG: Command: #{cmd.join(' ')}" if ENV['DEBUG']
-    log "DEBUG: stdout: #{stdout}" if ENV['DEBUG'] && !stdout.empty?
-    log "DEBUG: stderr: #{stderr}" if ENV['DEBUG'] && !stderr.empty?
+    log(:debug, "DEBUG: Command: #{cmd.join(' ')}") if ENV['DEBUG']
+    log(:debug, "DEBUG: stdout: #{stdout}") if ENV['DEBUG'] && !stdout.empty?
+    log(:debug, "DEBUG: stderr: #{stderr}") if ENV['DEBUG'] && !stderr.empty?
 
     # Clean up prompt file
     File.unlink(prompt_file) if File.exist?(prompt_file)
@@ -324,10 +329,24 @@ class LlamaLocalRunner
     # Extract JSON from output (remove any extra text)
     response = stdout.strip
 
+    # Remove common llama.cpp output patterns
+    response = response.gsub(/^system_info:.*$/m, '')
+    response = response.gsub(/^main:.*$/m, '')
+    response = response.gsub(/^sampler.*$/m, '')
+    response = response.gsub(/^generate:.*$/m, '')
+    response = response.gsub(/^== Running in interactive mode\. ==$.*?^$/m, '')
+    response = response.gsub(/^>.*$/m, '')
+    response = response.gsub(/^llama_perf.*$/m, '')
+    response = response.gsub(/^llama_memory.*$/m, '')
+    response = response.gsub(/^ggml_metal.*$/m, '')
+    response = response.gsub(/^\*\*\*.*$/m, '')
+    response = response.gsub(/^EOF by user$/m, '')
+    response = response.strip
+
     # Try to find JSON in the response
     json_match = response.match(/\{.*\}/m)
     if json_match
-      json_match[0]
+      json_match[0].strip
     else
       response
     end
