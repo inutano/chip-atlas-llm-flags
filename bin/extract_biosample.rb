@@ -432,9 +432,20 @@ class BioSampleExtractor
 
     scientific_name = nil
     scientific_name_fields.each do |field|
-      if biosample[field] && !biosample[field].to_s.strip.empty?
-        scientific_name = biosample[field].to_s.strip
-        break
+      if biosample[field]
+        if biosample[field].is_a?(Hash)
+          # Handle nested organism object
+          if biosample[field]['taxonomy_name']
+            scientific_name = biosample[field]['taxonomy_name'].to_s.strip
+            break
+          elsif biosample[field]['organism_name']
+            scientific_name = biosample[field]['organism_name'].to_s.strip
+            break
+          end
+        elsif !biosample[field].to_s.strip.empty?
+          scientific_name = biosample[field].to_s.strip
+          break
+        end
       end
     end
 
@@ -446,9 +457,17 @@ class BioSampleExtractor
 
     taxid = nil
     taxid_fields.each do |field|
-      if biosample[field] && !biosample[field].to_s.strip.empty?
-        taxid = biosample[field].to_s.strip
-        break
+      if biosample[field]
+        if biosample[field].is_a?(Hash)
+          # Handle nested organism object
+          if biosample[field]['taxonomy_id']
+            taxid = biosample[field]['taxonomy_id'].to_s.strip
+            break
+          end
+        elsif !biosample[field].to_s.strip.empty?
+          taxid = biosample[field].to_s.strip
+          break
+        end
       end
     end
 
