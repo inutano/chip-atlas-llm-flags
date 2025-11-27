@@ -341,10 +341,13 @@ class LlamaLocalRunner
     response = response.gsub(/^ggml_metal.*$/m, '')
     response = response.gsub(/^\*\*\*.*$/m, '')
     response = response.gsub(/^EOF by user$/m, '')
+    response = response.gsub(/\[end of text\]/i, '')  # Remove [end of text] markers
+    response = response.gsub(/```json\s*/, '')        # Remove opening ```json
+    response = response.gsub(/```\s*$/, '')           # Remove closing ```
     response = response.strip
 
     # Try to find JSON in the response
-    json_match = response.match(/\{.*\}/m)
+    json_match = response.match(/\{.*?\}/m)
     if json_match
       json_match[0].strip
     else
