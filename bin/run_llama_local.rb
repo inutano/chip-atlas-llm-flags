@@ -43,7 +43,12 @@ class LlamaLocalRunner
     @ctx_size = options[:ctx_size] || 4096
     @batch_size = options[:batch_size] || 8
     @base_output_dir = options[:output_dir] || '.'
-    @binary_path = options[:binary_path] || 'llama-cli'
+    @binary_path = options[:binary_path] || '~/repos/llama.cpp/build/bin/llama-cli'
+
+    # Grammar enforcement settings (enabled by default)
+    @use_grammar = options.fetch(:use_grammar, true)
+    @grammar_file = options[:grammar_file]
+    @llama_cpp_path = options[:llama_cpp_path] || detect_llama_cpp_path
 
     # Normalize base output directory
     @base_output_dir = normalize_base_output_dir(@base_output_dir)
@@ -62,6 +67,7 @@ class LlamaLocalRunner
     @individual_runtimes = []
 
     setup_logging
+    setup_grammar
     load_prompt_template
   end
 
@@ -129,6 +135,9 @@ class LlamaLocalRunner
     @logger.formatter = proc do |severity, datetime, progname, msg|
       "#{datetime.iso8601} [#{severity}] #{msg}\n"
     end
+
+    # Grammar status will be logged after setup
+    @grammar_status_logged = false
   end
 
   def log(level, message)
@@ -176,9 +185,10 @@ class LlamaLocalRunner
     end
 
     # Test if binary is available
-    stdout, stderr, status = Open3.capture3("#{@binary_path} --help")
+    binary_path = File.expand_path(@binary_path)
+    stdout, stderr, status = Open3.capture3("#{binary_path} --help")
     unless status.success?
-      raise "LLM binary not found or not working: #{@binary_path}"
+      raise "LLM binary not found or not working: #{binary_path}"
     end
   end
 
@@ -242,10 +252,10 @@ class LlamaLocalRunner
     # Replace the template pattern with actual newlines
     content.gsub!(/\{KEY1\}: \{VAL1\}\n\{KEY2\}: \{VAL2\}\n\.\.\./, attrs_text)
 
-    # Format as Qwen2.5 chat template
-    chat_prompt = "<|im_start|>system\nYou are a helpful assistant that extracts information and returns only JSON responses.<|im_end|>\n<|im_start|>user\n#{content}<|im_end|>\n<|im_start|>assistant\n"
+    # Use simpler prompt format for better grammar compatibility
+    simple_prompt = "#{content}\n\nJSON response:"
 
-    chat_prompt
+    simple_prompt
   end
 
   def run_llm_inference(prompt)
@@ -270,13 +280,18 @@ class LlamaLocalRunner
 
           return [parsed, retries, nil]
         else
-          raise "Invalid prediction structure: #{prediction}"
+          error_msg = "Invalid prediction structure: #{prediction}"
+          error_msg += " (Grammar #{@use_grammar ? 'enabled' : 'disabled'})"
+          raise error_msg
         end
 
       rescue JSON::ParserError, StandardError => e
         retries += 1
+        error_msg = "#{e.message} (Grammar #{@use_grammar ? 'enabled' : 'disabled'})"
         if retries <= max_retries
-          log(:warn, "Retry #{retries}/#{max_retries} due to error: #{e.message}")
+          log(:warn, "Retry #{retries}/#{max_retries} due to error: #{error_msg}")
+        else
+          log(:error, "Max retries exceeded: #{error_msg}")
         end
       end
     end
@@ -297,9 +312,17 @@ class LlamaLocalRunner
     prompt_file = File.join(temp_dir, "llm_prompt_#{Process.pid}_#{rand(10000)}.txt")
     File.write(prompt_file, prompt)
 
+    # Debug: preserve prompt file if DEBUG is set
+    if ENV['DEBUG']
+      debug_prompt_file = File.join(@output_dir, "debug_prompt_#{Time.now.strftime('%H%M%S')}.txt")
+      FileUtils.cp(prompt_file, debug_prompt_file)
+      log(:debug, "DEBUG: Prompt saved to #{debug_prompt_file}")
+    end
+
     # Build llama.cpp command
+    binary_path = File.expand_path(@binary_path)
     cmd = [
-      @binary_path,
+      binary_path,
       '--model', @model_path,
       '--ctx-size', @ctx_size.to_s,
       '--batch-size', @batch_size.to_s,
@@ -310,6 +333,12 @@ class LlamaLocalRunner
       '--no-display-prompt',
       '--no-conversation'
     ]
+
+    # Add grammar file by default (if available)
+    if @use_grammar && @grammar_file && File.exist?(@grammar_file)
+      cmd += ['--grammar-file', @grammar_file]
+      log(:debug, "Using grammar file: #{@grammar_file}") if ENV['DEBUG']
+    end
 
     # Execute command
     stdout, stderr, status = Open3.capture3(*cmd)
@@ -394,6 +423,113 @@ class LlamaLocalRunner
       (sorted_runtimes[length / 2 - 1] + sorted_runtimes[length / 2]) / 2.0
     end
   end
+
+  def setup_grammar
+    if @use_grammar
+      @grammar_file ||= setup_default_grammar
+      unless @grammar_file && File.exist?(@grammar_file)
+        log(:warn, "Grammar file not available, proceeding without grammar enforcement")
+        @use_grammar = false
+      end
+    end
+
+    # Log grammar status after setup
+    if @use_grammar && @grammar_file && File.exist?(@grammar_file)
+      log(:info, "JSON grammar enforcement: ENABLED (#{@grammar_file})")
+    elsif @use_grammar
+      log(:warn, "JSON grammar enforcement: REQUESTED but grammar file not available")
+    else
+      log(:info, "JSON grammar enforcement: DISABLED")
+    end
+  end
+
+  def setup_default_grammar
+    schema_dir = File.join(__dir__, '..', 'schema')
+    grammar_dir = File.join(__dir__, '..', 'grammar')
+
+    FileUtils.mkdir_p(schema_dir) unless Dir.exist?(schema_dir)
+    FileUtils.mkdir_p(grammar_dir) unless Dir.exist?(grammar_dir)
+
+    schema_file = File.join(schema_dir, 'biosample_schema.json')
+    grammar_file = File.join(grammar_dir, 'biosample.gbnf')
+
+    # Create schema if it doesn't exist
+    unless File.exist?(schema_file)
+      create_default_schema(schema_file)
+    end
+
+    # Generate grammar if it doesn't exist or schema is newer
+    if !File.exist?(grammar_file) || File.mtime(schema_file) > File.mtime(grammar_file)
+      if generate_grammar_from_schema(schema_file, grammar_file)
+        log(:info, "Generated grammar file: #{grammar_file}")
+      else
+        log(:warn, "Failed to generate grammar file")
+        return nil
+      end
+    else
+      log(:debug, "Using existing grammar file: #{grammar_file}")
+    end
+
+    grammar_file
+  end
+
+  def create_default_schema(schema_file)
+    schema = {
+      "$schema" => "http://json-schema.org/draft-07/schema#",
+      "title" => "BioSample Classification Schema",
+      "type" => "object",
+      "required" => ["disease", "treatments", "gene-modification"],
+      "additionalProperties" => false,
+      "properties" => {
+        "disease" => { "type" => "boolean" },
+        "treatments" => { "type" => "boolean" },
+        "gene-modification" => { "type" => "boolean" }
+      }
+    }
+
+    File.write(schema_file, JSON.pretty_generate(schema))
+    log(:info, "Created default schema: #{schema_file}")
+  end
+
+  def generate_grammar_from_schema(schema_file, grammar_file)
+    # Try to load the grammar generator
+    generator_path = File.join(__dir__, 'generate_grammar.rb')
+
+    if File.exist?(generator_path)
+      begin
+        require_relative 'generate_grammar'
+        return GrammarGenerator.generate_from_schema(schema_file, grammar_file, @llama_cpp_path)
+      rescue => e
+        log(:warn, "Failed to use external grammar generator: #{e.message}")
+      end
+    end
+
+    # Fallback: create simple built-in grammar
+    grammar = <<~GBNF
+      root ::= object
+      object ::= "{" ws "\"disease\"" ws ":" ws boolean ws "," ws "\"treatments\"" ws ":" ws boolean ws "," ws "\"gene-modification\"" ws ":" ws boolean ws "}"
+      boolean ::= "true" | "false"
+      ws ::= [ \\t\\n\\r]*
+    GBNF
+
+    File.write(grammar_file, grammar)
+    log(:info, "Created built-in grammar file: #{grammar_file}")
+    true
+  rescue => e
+    log(:error, "Grammar generation failed: #{e.message}")
+    false
+  end
+
+  def detect_llama_cpp_path
+    paths = [
+      ENV['LLAMA_CPP_PATH'],
+      "~/repos/llama.cpp",
+      "/usr/local/llama.cpp",
+      "/opt/llama.cpp"
+    ].compact.map { |path| File.expand_path(path) }
+
+    paths.find { |path| File.exist?(path) } || "~/repos/llama.cpp"
+  end
 end
 
 def parse_arguments
@@ -420,6 +556,18 @@ def parse_arguments
 
     opts.on("--binary PATH", "Path to llama.cpp binary (default: llama-cli)") do |path|
       options[:binary_path] = path
+    end
+
+    opts.on("--no-grammar", "Disable JSON grammar enforcement (default: enabled)") do
+      options[:use_grammar] = false
+    end
+
+    opts.on("--grammar-file PATH", "Custom GBNF grammar file path (default: auto-generated)") do |path|
+      options[:grammar_file] = path
+    end
+
+    opts.on("--llama-cpp-path PATH", "Path to llama.cpp directory for grammar generation") do |path|
+      options[:llama_cpp_path] = path
     end
 
     opts.on("-h", "--help", "Show this help message") do

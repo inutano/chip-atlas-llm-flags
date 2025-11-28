@@ -1,0 +1,6 @@
+boolean ::= ("true" | "false") space
+disease-kv ::= "\"disease\"" space ":" space boolean
+gene-modification-kv ::= "\"gene-modification\"" space ":" space boolean
+root ::= "{" space disease-kv "," space treatments-kv "," space gene-modification-kv "}" space
+space ::= | " " | "\n"{1,2} [ \t]{0,20}
+treatments-kv ::= "\"treatments\"" space ":" space boolean

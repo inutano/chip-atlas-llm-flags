@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BioSample Classification Schema",
+  "description": "JSON schema for BioSample classification with disease, treatments, and gene-modification flags",
+  "type": "object",
+  "required": ["disease", "treatments", "gene-modification"],
+  "additionalProperties": false,
+  "properties": {
+    "disease": {
+      "type": "boolean",
+      "description": "True only when the sample explicitly originates from a diseased host individual"
+    },
+    "treatments": {
+      "type": "boolean",
+      "description": "True only when the sample has been intentionally perturbed or interfered with by an external intervention"
+    },
+    "gene-modification": {
+      "type": "boolean",
+      "description": "True only if explicit gene engineering is stated"
+    }
+  }
+}
