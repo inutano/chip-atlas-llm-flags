@@ -52,7 +52,7 @@ class BioSampleConverter
     if entry
       converted['accession'] = entry['accession']
       converted['organism'] = extract_organism(entry)
-      converted['description'] = entry.dig('Description', 'Title')
+      converted['title'] = entry.dig('Description', 'Title')
 
       # Convert attributes from redundant structure to simple key=value
       attributes = convert_attributes(entry['Attributes'])
@@ -60,7 +60,7 @@ class BioSampleConverter
     end
 
     # Only return record if it has meaningful content
-    if converted['attributes'] || converted['organism'] || converted['description']
+    if converted['attributes'] || converted['organism'] || converted['title']
       converted
     else
       nil
