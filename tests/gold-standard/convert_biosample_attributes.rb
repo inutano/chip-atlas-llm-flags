@@ -42,25 +42,24 @@ class BioSampleConverter
   def convert_record(record)
     return nil unless record && record['biosample_id']
 
-    converted = {
-      'biosample_id' => record['biosample_id'],
-      'srx' => record['srx']
-    }
-
     # Extract basic metadata
     entry = record['entry']
-    if entry
-      converted['accession'] = entry['accession']
-      converted['organism'] = extract_organism(entry)
-      converted['title'] = entry.dig('Description', 'Title')
+    return nil unless entry
 
-      # Convert attributes from redundant structure to simple key=value
-      attributes = convert_attributes(entry['Attributes'])
-      converted['attributes'] = attributes if attributes && !attributes.empty?
-    end
+    converted = {
+      'id' => record['biosample_id'],
+      'title' => entry.dig('Description', 'Title') || '',
+      'description' => '',
+      'organism' => extract_organism(entry),
+      'attributes' => {}
+    }
+
+    # Convert attributes from redundant structure to simple key=value
+    attributes = convert_attributes(entry['Attributes'])
+    converted['attributes'] = attributes if attributes && !attributes.empty?
 
     # Only return record if it has meaningful content
-    if converted['attributes'] || converted['organism'] || converted['title']
+    if converted['attributes'] || !converted['organism'].empty? || !converted['title'].empty?
       converted
     else
       nil
@@ -69,12 +68,21 @@ class BioSampleConverter
 
   def extract_organism(entry)
     organism_info = entry.dig('Description', 'Organism')
-    return nil unless organism_info
+    return '' unless organism_info
 
-    {
-      'taxonomy_id' => organism_info['taxonomy_id'],
-      'taxonomy_name' => organism_info['taxonomy_name']
-    }
+    scientific_name = organism_info['taxonomy_name']
+    taxid = organism_info['taxonomy_id']
+
+    # Combine scientific name and TaxID if both exist
+    if scientific_name && taxid
+      "#{scientific_name} (TaxID: #{taxid})"
+    elsif scientific_name
+      scientific_name
+    elsif taxid
+      "TaxID: #{taxid}"
+    else
+      ''
+    end
   end
 
   def convert_attributes(attributes_section)
