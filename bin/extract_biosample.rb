@@ -395,7 +395,8 @@ class BioSampleExtractor
     # Look for title, name, or sample_name (first found)
     possible_name_fields = [
       'title', 'Title', 'name', 'Name', 'sample_name', 'Sample_name',
-      'sample_title', 'Sample_title', 'sampleName', 'SampleName'
+      'sample_title', 'Sample_title', 'sampleName', 'SampleName',
+      'description', 'Description'
     ]
 
     possible_name_fields.each do |field|
