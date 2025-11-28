@@ -8,6 +8,7 @@
 # DESCRIPTION:
 #   Orchestrates the complete BioSample classification pipeline using local LLM.
 #   Dynamically handles timestamped filenames and provides timing information.
+#   All output is logged to both stdout and a centralized log file in the output directory.
 #
 # STEPS:
 #   1. Extract BioSample data
@@ -23,15 +24,68 @@
 
 set -euo pipefail
 
+# Global variables for logging
+LOG_FILE=""
+PIPELINE_START_TIME=""
+
+# Function to setup logging
+setup_logging() {
+    local output_dir=$1
+    LOG_FILE="$output_dir/pipeline.log"
+    PIPELINE_START_TIME=$(date +%s)
+
+    # Create log file and add header
+    {
+        echo "========================================="
+        echo "BioSample Classification Pipeline Log"
+        echo "========================================="
+        echo "Started at: $(date '+%Y-%m-%d %H:%M:%S')"
+        echo "Output directory: $output_dir"
+        echo "Command: $0 $*"
+        echo ""
+    } > "$LOG_FILE"
+
+    echo "Log file created: $LOG_FILE"
+}
+
+# Function to log messages to both stdout and log file
+log_message() {
+    local message="$*"
+    echo "$message"
+    if [[ -n "$LOG_FILE" && -f "$LOG_FILE" ]]; then
+        echo "$message" >> "$LOG_FILE"
+    fi
+}
+
+# Function to execute command with logging
+execute_with_logging() {
+    local command="$*"
+    log_message "Executing: $command"
+
+    if [[ -n "$LOG_FILE" && -f "$LOG_FILE" ]]; then
+        # Execute command and capture both stdout and stderr, tee to both console and log
+        eval "$command" 2>&1 | tee -a "$LOG_FILE"
+        local exit_code=${PIPESTATUS[0]}
+        if [[ $exit_code -ne 0 ]]; then
+            log_message "ERROR: Command failed with exit code $exit_code"
+            exit $exit_code
+        fi
+    else
+        # Fallback if logging not setup
+        eval "$command"
+    fi
+}
+
 # Function to print step headers with timing
 print_step() {
     local step_num=$1
     local step_name=$2
-    echo ""
-    echo "========================================="
-    echo "STEP $step_num: $step_name"
-    echo "========================================="
-    echo "Started at: $(date '+%Y-%m-%d %H:%M:%S')"
+
+    log_message ""
+    log_message "========================================="
+    log_message "STEP $step_num: $step_name"
+    log_message "========================================="
+    log_message "Started at: $(date '+%Y-%m-%d %H:%M:%S')"
 }
 
 # Function to print step completion with elapsed time
@@ -39,16 +93,17 @@ print_completion() {
     local start_time=$1
     local end_time=$(date +%s)
     local elapsed=$((end_time - start_time))
-    echo "Completed at: $(date '+%Y-%m-%d %H:%M:%S')"
-    echo "Elapsed time: ${elapsed} seconds"
-    echo ""
+
+    log_message "Completed at: $(date '+%Y-%m-%d %H:%M:%S')"
+    log_message "Elapsed time: ${elapsed} seconds"
+    log_message ""
 }
 
 # Function to find the most recent output directory
 find_latest_output_dir() {
     local latest_dir=$(ls -td output/*/ 2>/dev/null | head -n1)
     if [[ -z "$latest_dir" ]]; then
-        echo "ERROR: No output directories found" >&2
+        log_message "ERROR: No output directories found"
         exit 1
     fi
     echo "${latest_dir%/}"  # Remove trailing slash
@@ -60,7 +115,7 @@ find_file_in_output_dir() {
     local filename=$2
     local filepath="$output_dir/$filename"
     if [[ ! -f "$filepath" ]]; then
-        echo "ERROR: File not found: $filepath" >&2
+        log_message "ERROR: File not found: $filepath"
         exit 1
     fi
     echo "$filepath"
@@ -92,6 +147,7 @@ if [[ ! -f "$INPUT_JSON" ]]; then
     exit 1
 fi
 
+# Initial pipeline information (before logging setup)
 echo "========================================="
 echo "BioSample Classification Pipeline"
 echo "========================================="
@@ -104,11 +160,15 @@ echo ""
 step_start=$(date +%s)
 print_step "1" "Extract BioSample Data"
 
-ruby bin/extract_biosample.rb "$INPUT_JSON"
+execute_with_logging "ruby bin/extract_biosample.rb \"$INPUT_JSON\""
 latest_output_dir=$(find_latest_output_dir)
+
+# Setup logging now that we have the output directory
+setup_logging "$latest_output_dir"
+
 latest_extracted=$(find_file_in_output_dir "$latest_output_dir" "biosample_extracted.jsonl")
-echo "Latest extracted file: $latest_extracted"
-echo "Output directory: $latest_output_dir"
+log_message "Latest extracted file: $latest_extracted"
+log_message "Output directory: $latest_output_dir"
 
 print_completion $step_start
 
@@ -116,7 +176,7 @@ print_completion $step_start
 step_start=$(date +%s)
 print_step "2" "Validate Extracted Data"
 
-ruby bin/validate_extracted.rb "$latest_extracted"
+execute_with_logging "ruby bin/validate_extracted.rb \"$latest_extracted\""
 
 print_completion $step_start
 
@@ -124,9 +184,9 @@ print_completion $step_start
 step_start=$(date +%s)
 print_step "3" "Run Local LLM Inference"
 
-ruby bin/run_llama_local.rb "$latest_extracted" $LLM_ARGS
+execute_with_logging "ruby bin/run_llama_local.rb \"$latest_extracted\" $LLM_ARGS"
 latest_predictions=$(find_file_in_output_dir "$latest_output_dir" "biosample_predictions.jsonl")
-echo "Latest predictions file: $latest_predictions"
+log_message "Latest predictions file: $latest_predictions"
 
 print_completion $step_start
 
@@ -134,9 +194,9 @@ print_completion $step_start
 step_start=$(date +%s)
 print_step "4" "Normalize Predictions"
 
-ruby bin/normalize_predictions.rb "$latest_predictions"
+execute_with_logging "ruby bin/normalize_predictions.rb \"$latest_predictions\""
 latest_normalized=$(find_file_in_output_dir "$latest_output_dir" "normalized_predictions.jsonl")
-echo "Latest normalized file: $latest_normalized"
+log_message "Latest normalized file: $latest_normalized"
 
 print_completion $step_start
 
@@ -144,24 +204,29 @@ print_completion $step_start
 step_start=$(date +%s)
 print_step "5" "Create QA Sample"
 
-ruby bin/make_qa_sample.rb "$latest_extracted" "$latest_normalized" --n 200
+execute_with_logging "ruby bin/make_qa_sample.rb \"$latest_extracted\" \"$latest_normalized\" --n 200"
 latest_qa_sample=$(find_file_in_output_dir "$latest_output_dir" "qa_sample.tsv")
-echo "Latest QA sample file: $latest_qa_sample"
+log_message "Latest QA sample file: $latest_qa_sample"
 
 print_completion $step_start
 
 # Final summary
-echo "========================================="
-echo "PIPELINE COMPLETED SUCCESSFULLY"
-echo "========================================="
-echo "Input file: $INPUT_JSON"
-echo "Output directory: $latest_output_dir"
-echo "Final outputs:"
-echo "  - Extracted: $latest_extracted"
-echo "  - Predictions: $latest_predictions"
-echo "  - Normalized: $latest_normalized"
-echo "  - QA Sample: $latest_qa_sample"
-echo ""
-echo "All output files are organized in: $latest_output_dir"
-echo "Completed at: $(date '+%Y-%m-%d %H:%M:%S')"
-echo "========================================="
+pipeline_end_time=$(date +%s)
+total_elapsed=$((pipeline_end_time - PIPELINE_START_TIME))
+
+log_message "========================================="
+log_message "PIPELINE COMPLETED SUCCESSFULLY"
+log_message "========================================="
+log_message "Input file: $INPUT_JSON"
+log_message "Output directory: $latest_output_dir"
+log_message "Log file: $LOG_FILE"
+log_message "Final outputs:"
+log_message "  - Extracted: $latest_extracted"
+log_message "  - Predictions: $latest_predictions"
+log_message "  - Normalized: $latest_normalized"
+log_message "  - QA Sample: $latest_qa_sample"
+log_message ""
+log_message "All output files are organized in: $latest_output_dir"
+log_message "Total pipeline runtime: ${total_elapsed} seconds"
+log_message "Completed at: $(date '+%Y-%m-%d %H:%M:%S')"
+log_message "========================================="
