@@ -117,7 +117,7 @@ OptionParser.new do |opts|
     options[:prediction] = file
   end
 
-  opts.on("-o", "--output FILE", "Output comparison table file") do |file|
+  opts.on("-o", "--output FILE", "Output comparison table file (optional, defaults to prediction file directory)") do |file|
     options[:output] = file
   end
 
@@ -128,10 +128,16 @@ OptionParser.new do |opts|
 end.parse!
 
 # Validate required arguments
-unless options[:human] && options[:prediction] && options[:output]
-  puts "Error: All options (--human, --prediction, --output) are required"
+unless options[:human] && options[:prediction]
+  puts "Error: Both --human and --prediction options are required"
   puts "Use --help for usage information"
   exit 1
+end
+
+# Set default output file if not provided
+unless options[:output]
+  prediction_dir = File.dirname(options[:prediction])
+  options[:output] = File.join(prediction_dir, "comparison_table.tsv")
 end
 
 # Validate input files exist
