@@ -107,9 +107,9 @@ end
 # Command line interface
 options = {}
 OptionParser.new do |opts|
-  opts.banner = "Usage: #{$0} [options]"
+  opts.banner = "Usage: #{$0} -p PREDICTION_FILE [options]"
 
-  opts.on("-h", "--human FILE", "Human curated reference file") do |file|
+  opts.on("-h", "--human FILE", "Human curated reference file (optional, defaults to tests/gold-standard/human-curator-results.tsv)") do |file|
     options[:human] = file
   end
 
@@ -128,10 +128,15 @@ OptionParser.new do |opts|
 end.parse!
 
 # Validate required arguments
-unless options[:human] && options[:prediction]
-  puts "Error: Both --human and --prediction options are required"
+unless options[:prediction]
+  puts "Error: --prediction option is required"
   puts "Use --help for usage information"
   exit 1
+end
+
+# Set default human file if not provided
+unless options[:human]
+  options[:human] = "tests/gold-standard/human-curator-results.tsv"
 end
 
 # Set default output file if not provided
